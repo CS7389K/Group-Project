@@ -1,0 +1,24 @@
+# Python Dependencies for TurtleBot3 VLM Perception
+# Install with: pip3 install -r requirements.txt
+
+# Core ML frameworks
+torch>=1.10.0
+transformers>=4.30.0
+
+# Computer Vision
+opencv-python>=4.5.0
+pillow>=9.0.0
+ultralytics>=8.0.0  # YOLO11
+
+# Quantization (for Jetson)
+bitsandbytes>=0.41.0
+accelerate>=0.20.0
+
+# System monitoring
+psutil>=5.8.0
+
+# ROS2 dependencies (installed via apt, listed for reference)
+# sudo apt install ros-foxy-cv-bridge
+# sudo apt install python3-opencv
+# sudo apt install ros-foxy-sensor-msgs
+# sudo apt install ros-foxy-std-msgs

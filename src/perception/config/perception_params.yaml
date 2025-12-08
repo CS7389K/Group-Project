@@ -1,0 +1,28 @@
+# TurtleBot3 VLM Perception Configuration
+
+# Camera settings
+camera:
+  width: 640
+  height: 480
+  fps: 30
+  flip_method: 0  # 0=none, 2=rotate-180
+
+# VLM Reasoning settings
+vlm:
+  analysis_rate: 2.5  # Hz (target: 2-3 Hz for Jetson Xavier NX)
+  detection_threshold: 0.5  # YOLO confidence threshold
+  use_yolo: true
+  
+# Robot specifications (TurtleBot3 + OpenMANIPULATOR)
+robot:
+  payload_g: 500  # Maximum gripper payload in grams
+  gripper_min_mm: 10  # Minimum gripper opening
+  gripper_max_mm: 100  # Maximum gripper opening
+  reach_mm: 400  # Manipulator reach
+  footprint_mm: 300  # Robot base footprint
+
+# Model settings
+models:
+  moondream_id: "vikhyatk/moondream2"
+  yolo_model: "yolo11n.pt"  # Nano model for Jetson
+  quantization: "8bit"  # 8-bit quantization for memory efficiency
