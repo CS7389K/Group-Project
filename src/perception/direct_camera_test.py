@@ -9,20 +9,37 @@ import numpy as np
 import sys
 
 print("=" * 70)
-print("DIRECT CAMERA TEST (No ROS)")
+print("DIRECT CAMERA TEST (No ROS) - JETSON OPTIMIZED")
 print("=" * 70)
 print()
 
-# Test 1: Simple camera access
-print("Test 1: Opening camera with VideoCapture(0)...")
-cap = cv2.VideoCapture(0)
+# Test 1: GStreamer camera access (proper for Jetson + RPi Camera)
+print("Test 1: Opening camera with GStreamer (nvarguscamerasrc)...")
+gst_pipeline = (
+    "nvarguscamerasrc sensor-id=0 ! "
+    "video/x-raw(memory:NVMM), width=640, height=480, format=NV12, framerate=30/1 ! "
+    "nvvidconv flip-method=0 ! "
+    "video/x-raw, format=BGRx ! "
+    "videoconvert ! "
+    "video/x-raw, format=BGR ! "
+    "appsink drop=1"
+)
+
+print(f"Pipeline: {gst_pipeline}")
+cap = cv2.VideoCapture(gst_pipeline, cv2.CAP_GSTREAMER)
 
 if not cap.isOpened():
-    print("❌ FAILED: Cannot open /dev/video0")
-    print("   Check: ls /dev/video*")
+    print("❌ FAILED: Cannot open camera with GStreamer")
+    print("\nTroubleshooting:")
+    print("1. Check camera connection: ls /dev/video*")
+    print("2. Try manual GStreamer test:")
+    print("   gst-launch-1.0 nvarguscamerasrc ! nvoverlaysink")
+    print("3. Release camera resources:")
+    print("   sudo systemctl restart nvargus-daemon")
+    print("4. If still failing, camera may not be properly connected")
     sys.exit(1)
 
-print("✓ Camera opened")
+print("✓ Camera opened with GStreamer")
 
 # Test 2: Capture frames
 print("\nTest 2: Capturing frames...")
