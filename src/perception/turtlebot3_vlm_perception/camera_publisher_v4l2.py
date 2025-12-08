@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Camera Publisher Node for TurtleBot3 + Jetson Xavier NX
-========================================================
-Publishes RPi Camera v2/HQ images using hardware-accelerated GStreamer pipeline.
+Alternative Camera Publisher using V4L2 (Fallback)
+===================================================
+Use this if nvarguscamerasrc doesn't work with your camera.
+This uses standard V4L2 driver instead of Nvidia's nvarguscamerasrc.
 
-Topic: /camera/image_raw (sensor_msgs/Image)
-Rate: 30 Hz
-Hardware: Jetson Xavier NX + Raspberry Pi Camera Module v2/HQ
+Replace camera_publisher.py with this file if you get white images.
 """
 
 import rclpy
@@ -17,55 +16,52 @@ from cv_bridge import CvBridge
 import cv2
 
 
-class CameraPublisher(Node):
-    """
-    Hardware-accelerated camera publisher using nvarguscamerasrc.
-    Optimized for TurtleBot3 on Jetson Xavier NX.
-    """
+class CameraPublisherV4L2(Node):
+    """Camera publisher using V4L2 (standard Linux video driver)"""
     
     def __init__(self):
-        super().__init__('camera_publisher')
+        super().__init__('camera_publisher_v4l2')
         
         # Declare parameters
+        self.declare_parameter('camera_device', 0)  # /dev/video0
         self.declare_parameter('camera_width', 640)
         self.declare_parameter('camera_height', 480)
         self.declare_parameter('camera_fps', 30)
-        self.declare_parameter('flip_method', 0)  # 0=none, 2=rotate-180
         
         # Get parameters
+        device = self.get_parameter('camera_device').value
         width = self.get_parameter('camera_width').value
         height = self.get_parameter('camera_height').value
         fps = self.get_parameter('camera_fps').value
-        flip = self.get_parameter('flip_method').value
         
-        # GStreamer pipeline for Jetson Xavier NX + RPi Camera
-        # Uses hardware acceleration (nvarguscamerasrc -> nvvidconv)
-        self.gstreamer_pipeline = (
-            f"nvarguscamerasrc ! "
-            f"video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1 ! "
-            f"nvvidconv flip-method={flip} ! "
-            f"video/x-raw, width={width}, height={height}, format=BGRx ! "
-            f"videoconvert ! "
-            f"video/x-raw, format=BGR ! appsink"
-        )
-        
-        self.get_logger().info(f'Initializing camera with pipeline:')
+        self.get_logger().info('Initializing camera with V4L2:')
+        self.get_logger().info(f'  Device: /dev/video{device}')
         self.get_logger().info(f'  Resolution: {width}x{height} @ {fps} FPS')
-        self.get_logger().info(f'  Flip method: {flip}')
         
-        # Open camera
-        self.cap = cv2.VideoCapture(self.gstreamer_pipeline, cv2.CAP_GSTREAMER)
+        # Open camera using standard OpenCV VideoCapture
+        self.cap = cv2.VideoCapture(device)
         
         if not self.cap.isOpened():
             self.get_logger().error('Failed to open camera! Check:')
-            self.get_logger().error('  1. Camera cable connection')
-            self.get_logger().error('  2. Camera detected: ls /dev/video*')
-            self.get_logger().error('  3. GStreamer: gst-inspect-1.0 nvarguscamerasrc')
+            self.get_logger().error(f'  1. Camera detected: ls /dev/video*')
+            self.get_logger().error(f'  2. Try different device: camera_device:=1')
+            self.get_logger().error(f'  3. Check permissions: sudo usermod -aG video $USER')
             raise RuntimeError('Camera initialization failed')
         
-        self.get_logger().info('✅ Camera opened successfully')
+        # Set camera properties
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.cap.set(cv2.CAP_PROP_FPS, fps)
         
-        # QoS Profile: Best Effort for real-time streaming
+        # Verify actual settings
+        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
+        
+        self.get_logger().info('✅ Camera opened successfully')
+        self.get_logger().info(f'  Actual: {actual_width}x{actual_height} @ {actual_fps} FPS')
+        
+        # QoS Profile
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
@@ -82,7 +78,7 @@ class CameraPublisher(Node):
         self.bridge = CvBridge()
         self.frame_count = 0
         
-        # Timer for publishing
+        # Timer
         self.timer = self.create_timer(1.0 / fps, self.timer_callback)
         
         self.get_logger().info(f'Publishing to /camera/image_raw at {fps} Hz')
@@ -95,11 +91,10 @@ class CameraPublisher(Node):
             self.get_logger().warn('Failed to capture frame', throttle_duration_sec=5.0)
             return
         
-        # Check if frame is valid (not all white/black)
         if frame is None or frame.size == 0:
             self.get_logger().warn('Empty frame received', throttle_duration_sec=5.0)
             return
-            
+        
         try:
             # Convert to ROS Image message
             msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
@@ -109,21 +104,23 @@ class CameraPublisher(Node):
             self.publisher.publish(msg)
             
             self.frame_count += 1
-            if self.frame_count % 300 == 0:  # Log every 10 seconds at 30 FPS
+            if self.frame_count % 300 == 0:
                 self.get_logger().info(f'Published {self.frame_count} frames')
             
-            # Debug: Log first frame stats
+            # Debug first frame
             if self.frame_count == 1:
                 import numpy as np
-                self.get_logger().info(f'First frame stats: shape={frame.shape}, '
+                self.get_logger().info(f'First frame: shape={frame.shape}, '
                                       f'mean={np.mean(frame):.1f}, '
                                       f'min={np.min(frame)}, max={np.max(frame)}')
-                
+                if np.mean(frame) > 250:
+                    self.get_logger().warn('⚠️  Frame appears to be all white! Check camera.')
+                    
         except Exception as e:
             self.get_logger().error(f'Error publishing frame: {e}')
     
     def __del__(self):
-        """Cleanup on shutdown"""
+        """Cleanup"""
         if hasattr(self, 'cap') and self.cap.isOpened():
             self.cap.release()
             self.get_logger().info('Camera released')
@@ -134,7 +131,7 @@ def main(args=None):
     rclpy.init(args=args)
     
     try:
-        node = CameraPublisher()
+        node = CameraPublisherV4L2()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass

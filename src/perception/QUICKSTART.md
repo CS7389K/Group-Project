@@ -58,6 +58,16 @@ echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
+### Viewing Camera Feed (Optional)
+```bash
+# Install image viewer (if not already installed)
+sudo apt install ros-foxy-rqt-image-view
+
+# Run viewer (no need to specify topic in command)
+ros2 run rqt_image_view rqt_image_view
+# Then select /camera/image_raw from the dropdown menu
+```
+
 ### Debugging
 ```bash
 # Check nodes
@@ -68,7 +78,7 @@ ros2 topic list
 ros2 topic hz /camera/image_raw
 ros2 topic echo /camera/image_raw --no-arr
 
-# Check camera
+# Check camera hardware
 ls /dev/video*
 gst-launch-1.0 nvarguscamerasrc ! nvoverlaysink
 

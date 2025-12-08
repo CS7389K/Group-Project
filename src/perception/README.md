@@ -59,6 +59,7 @@ sudo apt install -y \
     ros-foxy-cv-bridge \
     ros-foxy-sensor-msgs \
     ros-foxy-std-msgs \
+    ros-foxy-rqt-image-view \
     python3-opencv \
     python3-pip
 
@@ -156,16 +157,95 @@ source ~/ros2_ws/install/setup.bash
 # Launch camera
 ros2 launch turtlebot3_vlm_perception camera_only.launch.py
 
-# In another terminal (source again!), view images
-source /opt/ros/foxy/setup.bash
-source ~/ros2_ws/install/setup.bash
-ros2 run rqt_image_view rqt_image_view /camera/image_raw
+# In another terminal, check if images are being published
+ros2 topic hz /camera/image_raw
+ros2 topic echo /camera/image_raw --no-arr
+
+# To view images (requires rqt_image_view - install if needed)
+sudo apt install ros-foxy-rqt-image-view
+ros2 run rqt_image_view rqt_image_view
+# Then select /camera/image_raw from the dropdown
 ```
 
 **Troubleshooting Camera:**
 - Check connection: `ls /dev/video*` (should show `/dev/video0`)
 - Test GStreamer: `gst-launch-1.0 nvarguscamerasrc ! nvoverlaysink`
 - If camera is upside down, set `flip_method:=2` in launch file
+
+**If you see a WHITE image:**
+
+This usually means the camera isn't being accessed correctly. Try these steps:
+
+```bash
+# 1. Check if camera is detected
+ls /dev/video*
+# Should show: /dev/video0
+
+# 2. Test camera directly with GStreamer
+gst-launch-1.0 nvarguscamerasrc ! 'video/x-raw(memory:NVMM), width=1920, height=1080, format=NV12, framerate=30/1' ! nvoverlaysink
+
+# 3. Check camera module is enabled
+# Look for "IMX219" or your camera model
+dmesg | grep -i imx
+dmesg | grep -i camera
+
+# 4. Check permissions
+sudo usermod -aG video $USER
+# Then logout and login again
+
+# 5. Try alternative pipeline (V4L2 instead of nvarguscamerasrc)
+# Edit camera_publisher.py and replace gstreamer_pipeline with:
+# "v4l2src device=/dev/video0 ! video/x-raw,width=640,height=480 ! videoconvert ! appsink"
+
+# 6. Test with simple OpenCV capture
+python3 << EOF
+import cv2
+cap = cv2.VideoCapture(0)
+ret, frame = cap.read()
+if ret:
+    print(f"Frame captured: {frame.shape}")
+    print(f"Mean pixel value: {frame.mean()}")
+else:
+    print("Failed to capture")
+cap.release()
+EOF
+```
+
+**Common causes of white image:**
+- Camera cable not fully seated in connector
+- Wrong CSI port (try CSI-0 vs CSI-1)
+- Camera not enabled in device tree
+- Incompatible GStreamer pipeline for your camera model
+- Camera module defective or wrong model (RPi Camera v1 vs v2 vs HQ)
+
+**Quick Fix: Use V4L2 fallback camera driver**
+
+If nvarguscamerasrc doesn't work, use the V4L2 version:
+
+```bash
+# 1. Edit setup.py to use the V4L2 camera publisher
+cd ~/ros2_ws/src/turtlebot3_vlm_perception
+
+# Replace camera_publisher with camera_publisher_v4l2 in entry_points
+nano setup.py
+# Change line:
+#   'camera_publisher = turtlebot3_vlm_perception.camera_publisher:main',
+# To:
+#   'camera_publisher = turtlebot3_vlm_perception.camera_publisher_v4l2:main',
+
+# 2. Rebuild
+cd ~/ros2_ws
+colcon build --packages-select turtlebot3_vlm_perception
+source install/setup.bash
+
+# 3. Test again
+ros2 launch turtlebot3_vlm_perception camera_only.launch.py
+```
+
+Alternatively, run the V4L2 version directly:
+```bash
+ros2 run turtlebot3_vlm_perception camera_publisher_v4l2
+```
 
 ### Run Complete System
 
