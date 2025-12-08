@@ -1,0 +1,35 @@
+services:
+  moondream2-jetson:
+    build: .
+    image: moondream2-jetson-sim:latest
+    container_name: moondream2_dev
+    
+    shm_size: '2gb'
+    
+    volumes:
+      - ./src:/workspace/src
+      - ./scripts:/workspace/scripts
+      - ./data:/workspace/data
+      - ./models:/workspace/models
+      - ./configs:/workspace/configs
+      - ./logs:/workspace/logs
+      - ./tests:/workspace/tests
+    
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - CUDA_VISIBLE_DEVICES=0
+    
+    deploy:
+      resources:
+        limits:
+          memory: 7.5G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    stdin_open: true
+    tty: true
+    network_mode: "host"

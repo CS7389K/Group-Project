@@ -1,0 +1,36 @@
+# Jetson Xavier NX Hardware
+hardware:
+  ram_gb: 8
+  gpu_memory_gb: 8  # Unified memory
+  cpu_cores: 6
+
+# TurtleBot3 Robot
+robot:
+  platform: "TurtleBot3 Waffle Pi"
+  manipulator:
+    type: "OpenMANIPULATOR-X"
+    reach_mm: 400
+    payload_g: 500
+    gripper_range_mm: [10, 100]
+
+# Perception Pipeline
+perception:
+  yolo:
+    model: "yolo11n"
+    target_fps: 60
+    tensorrt: true
+    
+  vlm:
+    model: "vikhyatk/moondream2"
+    revision: "2025-06-21"  # Latest stable
+    quantization: "8bit"  # or "4bit" for even less memory
+    target_inference_ms: [300, 450]
+    grounded_reasoning: true
+    
+# Decision Logic
+decision:
+  actions: ["GRASP", "PUSH", "AVOID", "IGNORE", "STOP"]
+  weight_categories:
+    light: [0, 100]
+    medium: [100, 500]
+    heavy: [500, 10000]
