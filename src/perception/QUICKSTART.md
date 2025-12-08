@@ -6,13 +6,28 @@
 ```bash
 cd src/perception
 chmod +x install.sh check_system.sh
-./install.sh                    # Full installation
+./install.sh                    # Full installation (includes colcon build)
 ./check_system.sh               # Verify installation
+```
+
+### Why colcon build?
+`colcon build` registers the package with ROS2. Without it:
+- ❌ `ros2 launch` commands won't work
+- ❌ `ros2 run` commands won't find nodes
+- ❌ Launch files won't be accessible
+
+**After any code changes, rebuild:**
+```bash
+cd ~/ros2_ws
+source /opt/ros/foxy/setup.bash
+colcon build --packages-select turtlebot3_vlm_perception
+source install/setup.bash
 ```
 
 ### Running the System
 ```bash
-# Source workspace
+# IMPORTANT: Source workspace first (every new terminal!)
+source /opt/ros/foxy/setup.bash
 source ~/ros2_ws/install/setup.bash
 
 # Enable max performance (Jetson)
@@ -31,6 +46,16 @@ ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py \
     detection_threshold:=0.6 \
     camera_width:=640 \
     camera_height:=480
+```
+
+### Auto-source on Terminal Startup
+```bash
+# Add to .bashrc (one-time setup)
+echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+
+# Reload
+source ~/.bashrc
 ```
 
 ### Debugging

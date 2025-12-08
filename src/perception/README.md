@@ -98,30 +98,67 @@ pip3 install psutil
 
 ### 5. Build the Package
 
+**Why is `colcon build` needed?**
+
+`colcon build` is essential for ROS2 packages because it:
+- Registers the package with ROS2 (enables `ros2 launch` and `ros2 run` commands)
+- Installs launch files, config files, and Python modules to the correct locations
+- Creates entry points for your nodes (`camera_publisher`, `vlm_reasoner`)
+- Generates the `install/` directory with `setup.bash` for environment configuration
+
+Without building, ROS2 won't recognize the package and launch commands will fail.
+
 ```bash
 cd ~/ros2_ws
 
 # Source ROS2
 source /opt/ros/foxy/setup.bash
 
-# Build
+# Build the package
 colcon build --packages-select turtlebot3_vlm_perception
 
-# Source workspace
+# Source workspace (required after every build)
 source install/setup.bash
+
+# Add to .bashrc for automatic sourcing
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
 ```
 
 ## 🎮 Usage
+
+### Before Running: Source the Workspace
+
+**Every time you open a new terminal**, you must source the workspace:
+
+```bash
+# Source ROS2 Foxy
+source /opt/ros/foxy/setup.bash
+
+# Source your workspace
+source ~/ros2_ws/install/setup.bash
+```
+
+**Tip**: Add these to `~/.bashrc` to auto-source on terminal startup:
+```bash
+echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+```
 
 ### Test Camera Only
 
 First verify the camera works:
 
 ```bash
-# Terminal 1: Launch camera
+# Source workspace
+source /opt/ros/foxy/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+# Launch camera
 ros2 launch turtlebot3_vlm_perception camera_only.launch.py
 
-# Terminal 2: View images
+# In another terminal (source again!), view images
+source /opt/ros/foxy/setup.bash
+source ~/ros2_ws/install/setup.bash
 ros2 run rqt_image_view rqt_image_view /camera/image_raw
 ```
 
@@ -135,6 +172,15 @@ ros2 run rqt_image_view rqt_image_view /camera/image_raw
 Launch both camera and VLM reasoning:
 
 ```bash
+# 1. Source workspace (required!)
+source /opt/ros/foxy/setup.bash
+source ~/ros2_ws/install/setup.bash
+
+# 2. Enable max performance (recommended for Jetson)
+sudo nvpmodel -m 0
+sudo jetson_clocks
+
+# 3. Launch complete system
 ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py
 ```
 
@@ -184,6 +230,10 @@ Press Ctrl+C to stop
 ### Custom Parameters
 
 ```bash
+# Always source first!
+source /opt/ros/foxy/setup.bash
+source ~/ros2_ws/install/setup.bash
+
 # Adjust analysis rate (1-3 Hz recommended for Jetson)
 ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py \
     analysis_rate:=2.0
@@ -196,7 +246,7 @@ ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py \
 ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py \
     use_yolo:=false
 
-# Camera resolution
+# Camera resolution (lower = faster)
 ros2 launch turtlebot3_vlm_perception vlm_perception.launch.py \
     camera_width:=320 camera_height:=240
 ```
