@@ -174,7 +174,27 @@ ros2 run rqt_image_view rqt_image_view
 
 **If you see a WHITE or GRAY image:**
 
-This typically means the camera is being accessed but not configured properly. Try these solutions in order:
+This typically means the camera is being accessed but not configured properly.
+
+**✅ FIXED: Updated GStreamer Pipeline**
+
+The camera publisher has been updated with the correct GStreamer pipeline based on the working CS7389K/Milestone-4 implementation. Key fixes:
+- Added `sensor-id=0` parameter to nvarguscamerasrc
+- Added `drop=1` to appsink to prevent buffering
+- Proper format specifications
+
+**After updating the code, rebuild:**
+```bash
+cd ~/ros2_ws
+source /opt/ros/foxy/setup.bash
+colcon build --packages-select turtlebot3_vlm_perception
+source install/setup.bash
+
+# Test camera
+ros2 launch turtlebot3_vlm_perception camera_only.launch.py
+```
+
+**If still showing white/gray, try these steps:**
 
 **Solution 1: Run Camera Diagnostic**
 ```bash

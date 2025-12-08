@@ -39,19 +39,25 @@ class CameraPublisher(Node):
         flip = self.get_parameter('flip_method').value
         
         # GStreamer pipeline for Jetson Xavier NX + RPi Camera
-        # Uses hardware acceleration (nvarguscamerasrc -> nvvidconv)
+        # Based on working pipeline from CS7389K/Milestone-4
+        # Key differences from broken version:
+        # 1. sensor-id=0 parameter
+        # 2. Capture at native resolution, then scale down
+        # 3. drop=1 in appsink to prevent buffering
         self.gstreamer_pipeline = (
-            f"nvarguscamerasrc ! "
+            f"nvarguscamerasrc sensor-id=0 ! "
             f"video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1 ! "
             f"nvvidconv flip-method={flip} ! "
-            f"video/x-raw, width={width}, height={height}, format=BGRx ! "
+            f"video/x-raw, format=BGRx, width={width}, height={height} ! "
             f"videoconvert ! "
-            f"video/x-raw, format=BGR ! appsink"
+            f"video/x-raw, format=BGR ! "
+            f"appsink drop=1"
         )
         
-        self.get_logger().info(f'Initializing camera with pipeline:')
+        self.get_logger().info('Initializing camera with pipeline:')
         self.get_logger().info(f'  Resolution: {width}x{height} @ {fps} FPS')
         self.get_logger().info(f'  Flip method: {flip}')
+        self.get_logger().info(f'  Pipeline: {self.gstreamer_pipeline}')
         
         # Open camera
         self.cap = cv2.VideoCapture(self.gstreamer_pipeline, cv2.CAP_GSTREAMER)
