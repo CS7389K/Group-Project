@@ -379,59 +379,115 @@ class VLMReasonerNode(Node):
         self.get_logger().info('🚀 VLM REASONING NODE READY')
         self.get_logger().info('=' * 70)
     
-    def image_callback(self, msg: Image):
-        """Process incoming camera frames"""
-        self.frame_count += 1
+    # def image_callback(self, msg: Image):
+    #     """Process incoming camera frames"""
+    #     self.frame_count += 1
         
-        try:
-            # Convert ROS Image to OpenCV
-            cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+    #     try:
+    #         # Convert ROS Image to OpenCV
+    #         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+    #         pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
             
-            # 1. Object Detection (YOLO - Fast)
-            detections = []
-            if self.use_yolo and self.yolo:
-                results = self.yolo(cv_image, verbose=False)
-                for r in results:
-                    for box in r.boxes:
-                        conf = float(box.conf[0])
-                        if conf > self.detection_threshold:
-                            cls_id = int(box.cls[0])
-                            class_name = self.yolo.names[cls_id]
-                            bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
+    #         # 1. Object Detection (YOLO - Fast)
+    #         detections = []
+    #         if self.use_yolo and self.yolo:
+    #             results = self.yolo(cv_image, verbose=False)
+    #             for r in results:
+    #                 for box in r.boxes:
+    #                     conf = float(box.conf[0])
+    #                     if conf > self.detection_threshold:
+    #                         cls_id = int(box.cls[0])
+    #                         class_name = self.yolo.names[cls_id]
+    #                         bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
                             
-                            detections.append(Detection(
-                                class_name=class_name,
-                                confidence=conf,
-                                bbox=bbox,
-                                timestamp=time.time()
-                            ))
+    #                         detections.append(Detection(
+    #                             class_name=class_name,
+    #                             confidence=conf,
+    #                             bbox=bbox,
+    #                             timestamp=time.time()
+    #                         ))
             
-            # Update detection state
-            self.current_detection = detections[0] if detections else None
+    #         # Update detection state
+    #         self.current_detection = detections[0] if detections else None
             
-            # 2. VLM Reasoning (Throttled to target Hz)
-            current_time = time.time()
-            if (self.current_detection and 
-                current_time - self.last_analysis_time >= self.analysis_interval):
+    #         # 2. VLM Reasoning (Throttled to target Hz)
+    #         current_time = time.time()
+    #         if (self.current_detection and 
+    #             current_time - self.last_analysis_time >= self.analysis_interval):
                 
-                self.last_analysis_time = current_time
+    #             self.last_analysis_time = current_time
                 
-                # Analyze with VLM
-                properties, analysis_time = self.vlm.analyze_object(
-                    pil_image, self.current_detection
-                )
+    #             # Analyze with VLM
+    #             properties, analysis_time = self.vlm.analyze_object(
+    #                 pil_image, self.current_detection
+    #             )
                 
-                # Make decision
-                self.current_reasoning = self.fusion.decide(
-                    self.current_detection, properties, analysis_time
-                )
+    #             # Make decision
+    #             self.current_reasoning = self.fusion.decide(
+    #                 self.current_detection, properties, analysis_time
+    #             )
             
-            # 3. Display Dashboard (every frame)
-            self.display_dashboard()
+    #         # 3. Display Dashboard (every frame)
+    #         self.display_dashboard()
             
-        except Exception as e:
-            self.get_logger().error(f'Image callback error: {e}', throttle_duration_sec=5.0)
+    #     except Exception as e:
+    #         self.get_logger().error(f'Image callback error: {e}', throttle_duration_sec=5.0)
+
+    def image_callback(self, msg: Image):
+    """Process incoming camera frames"""
+    self.frame_count += 1
+
+    try:
+        # Convert ROS Image to OpenCV
+        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+
+        # 1. Object Detection (YOLO - Fast)
+        detections = []
+        if self.use_yolo and self.yolo:
+            with torch.no_grad():
+                results = self.yolo(cv_image, verbose=False)
+            for r in results:
+                for box in r.boxes:
+                    conf = float(box.conf[0])
+                    if conf > self.detection_threshold:
+                        cls_id = int(box.cls[0])
+                        class_name = self.yolo.names[cls_id]
+                        bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
+
+                        detections.append(Detection(
+                            class_name=class_name,
+                            confidence=conf,
+                            bbox=bbox,
+                            timestamp=time.time()
+                        ))
+
+        # Update detection state
+        self.current_detection = detections[0] if detections else None
+
+        # 2. VLM Reasoning (Throttled to target Hz)
+        current_time = time.time()
+        if (self.current_detection and 
+            current_time - self.last_analysis_time >= self.analysis_interval and
+            self.vlm.is_loaded):
+
+            self.last_analysis_time = current_time
+
+            # Analyze with VLM
+            properties, analysis_time = self.vlm.analyze_object(
+                pil_image, self.current_detection
+            )
+
+            # Make decision
+            self.current_reasoning = self.fusion.decide(
+                self.current_detection, properties, analysis_time
+            )
+
+        # 3. Display Dashboard (every frame)
+        self.display_dashboard()
+
+    except Exception as e:
+        self.get_logger().error(f'Image callback error: {e}')
     
     def display_dashboard(self):
         """Display real-time reasoning dashboard in terminal"""
