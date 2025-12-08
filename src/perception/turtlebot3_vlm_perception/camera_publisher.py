@@ -87,47 +87,79 @@ class CameraPublisher(Node):
         
         self.get_logger().info(f'Publishing to /camera/image_raw at {fps} Hz')
     
-    def timer_callback(self):
-        """Capture and publish camera frame"""
-        ret, frame = self.cap.read()
+    # def timer_callback(self):
+    #     """Capture and publish camera frame"""
+    #     ret, frame = self.cap.read()
         
-        if not ret:
-            self.get_logger().warn('Failed to capture frame', throttle_duration_sec=5.0)
-            return
+    #     if not ret:
+    #         self.get_logger().warn('Failed to capture frame', throttle_duration_sec=5.0)
+    #         return
         
-        # Check if frame is valid (not all white/black)
-        if frame is None or frame.size == 0:
-            self.get_logger().warn('Empty frame received', throttle_duration_sec=5.0)
-            return
+    #     # Check if frame is valid (not all white/black)
+    #     if frame is None or frame.size == 0:
+    #         self.get_logger().warn('Empty frame received', throttle_duration_sec=5.0)
+    #         return
             
-        try:
-            # Convert to ROS Image message
-            msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'camera_link'
+    #     try:
+    #         # Convert to ROS Image message
+    #         msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+    #         msg.header.stamp = self.get_clock().now().to_msg()
+    #         msg.header.frame_id = 'camera_link'
             
-            self.publisher.publish(msg)
+    #         self.publisher.publish(msg)
             
-            self.frame_count += 1
-            if self.frame_count % 300 == 0:  # Log every 10 seconds at 30 FPS
-                self.get_logger().info(f'Published {self.frame_count} frames')
+    #         self.frame_count += 1
+    #         if self.frame_count % 300 == 0:  # Log every 10 seconds at 30 FPS
+    #             self.get_logger().info(f'Published {self.frame_count} frames')
             
-            # Debug: Log first frame stats
-            if self.frame_count == 1:
-                import numpy as np
-                self.get_logger().info(f'First frame stats: shape={frame.shape}, '
-                                      f'mean={np.mean(frame):.1f}, '
-                                      f'min={np.min(frame)}, max={np.max(frame)}')
+    #         # Debug: Log first frame stats
+    #         if self.frame_count == 1:
+    #             import numpy as np
+    #             self.get_logger().info(f'First frame stats: shape={frame.shape}, '
+    #                                   f'mean={np.mean(frame):.1f}, '
+    #                                   f'min={np.min(frame)}, max={np.max(frame)}')
                 
-        except Exception as e:
-            self.get_logger().error(f'Error publishing frame: {e}')
+    #     except Exception as e:
+    #         self.get_logger().error(f'Error publishing frame: {e}')
     
-    def __del__(self):
-        """Cleanup on shutdown"""
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            self.cap.release()
-            self.get_logger().info('Camera released')
+    # def __del__(self):
+    #     """Cleanup on shutdown"""
+    #     if hasattr(self, 'cap') and self.cap.isOpened():
+    #         self.cap.release()
+    #         self.get_logger().info('Camera released')
+    def timer_callback(self):
+    """Capture and publish camera frame"""
+    ret, frame = self.cap.read()
 
+    if not ret:
+        self.get_logger().warn('Failed to capture frame')
+        return
+
+    if frame is None or frame.size == 0:
+        self.get_logger().warn('Empty frame received')
+        return
+
+    try:
+        msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'camera_link'
+
+        self.publisher.publish(msg)
+
+        self.frame_count += 1
+        if self.frame_count % 300 == 0:
+            self.get_logger().info(f'Published {self.frame_count} frames')
+
+        if self.frame_count == 1:
+            import numpy as np
+            self.get_logger().info(
+                f'First frame stats: shape={frame.shape}, '
+                f'mean={np.mean(frame):.1f}, '
+                f'min={np.min(frame)}, max={np.max(frame)}'
+            )
+
+    except Exception as e:
+        self.get_logger().error(f'Error publishing frame: {e}')
 
 def main(args=None):
     """Main entry point"""
