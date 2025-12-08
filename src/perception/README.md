@@ -172,9 +172,57 @@ ros2 run rqt_image_view rqt_image_view
 - Test GStreamer: `gst-launch-1.0 nvarguscamerasrc ! nvoverlaysink`
 - If camera is upside down, set `flip_method:=2` in launch file
 
-**If you see a WHITE image:**
+**If you see a WHITE or GRAY image:**
 
-This usually means the camera isn't being accessed correctly. Try these steps:
+This typically means the camera is being accessed but not configured properly. Try these solutions in order:
+
+**Solution 1: Run Camera Diagnostic**
+```bash
+cd ~/ros2_ws/src/turtlebot3_vlm_perception
+chmod +x test_camera.py
+python3 test_camera.py
+
+# This will test different camera configurations and save test images to /tmp/
+# Check which configuration works: ls -lh /tmp/test_*.jpg
+```
+
+**Solution 2: Check Camera Module**
+```bash
+# Check if camera is detected by the system
+ls -l /dev/video*
+
+# Check kernel messages for camera
+dmesg | grep -i imx219  # For RPi Camera v2
+dmesg | grep -i imx477  # For RPi Camera HQ
+
+# List video devices with details
+sudo apt install v4l-utils
+v4l2-ctl --list-devices
+v4l2-ctl -d /dev/video0 --list-formats-ext
+```
+
+**Solution 3: Try Different Camera Pipeline**
+```bash
+# Test camera with simple command
+gst-launch-1.0 nvarguscamerasrc sensor-id=0 ! nvoverlaysink
+
+# If that shows white/gray, try:
+gst-launch-1.0 v4l2src device=/dev/video0 ! videoconvert ! xvimagesink
+```
+
+**Solution 4: Use V4L2 Camera Publisher (Most Reliable)**
+```bash
+# Stop the current node (Ctrl+C), then:
+cd ~/ros2_ws
+source /opt/ros/foxy/setup.bash
+source install/setup.bash
+
+# Run V4L2 version instead
+ros2 run turtlebot3_vlm_perception camera_publisher_v4l2
+
+# In another terminal, check the output
+ros2 run rqt_image_view rqt_image_view
+```
 
 ```bash
 # 1. Check if camera is detected

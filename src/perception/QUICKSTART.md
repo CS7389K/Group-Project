@@ -91,6 +91,24 @@ nvidia-smi                     # GPU usage (if available)
 ros2 run rqt_console rqt_console
 ```
 
+### Camera Shows White/Gray Image
+```bash
+# Quick diagnostic
+chmod +x fix_white_camera.sh
+./fix_white_camera.sh
+
+# Test camera manually
+python3 test_camera.py
+
+# Use V4L2 camera (more reliable)
+ros2 run turtlebot3_vlm_perception camera_publisher_v4l2
+
+# Common fixes:
+# 1. Reseat camera cable on both ends
+# 2. Check correct CSI port
+# 3. Verify camera with: v4l2-ctl --list-devices
+```
+
 ## 📊 Parameters
 
 ### Camera Publisher (`camera_publisher`)
