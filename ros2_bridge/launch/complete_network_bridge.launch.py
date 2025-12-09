@@ -89,6 +89,12 @@ def generate_launch_description():
         description='Default VLM prompt'
     )
     
+    show_preview_arg = DeclareLaunchArgument(
+        'show_preview',
+        default_value='true',
+        description='Show CV window with camera feed and VLM results'
+    )
+    
     # Startup message
     startup_msg = LogInfo(
         msg=[
@@ -140,6 +146,7 @@ def generate_launch_description():
             'inference_rate': LaunchConfiguration('inference_rate'),
             'timeout': LaunchConfiguration('timeout'),
             'prompt': LaunchConfiguration('prompt'),
+            'show_preview': LaunchConfiguration('show_preview'),
         }]
     )
     
@@ -154,6 +161,7 @@ def generate_launch_description():
         inference_rate_arg,
         timeout_arg,
         prompt_arg,
+        show_preview_arg,
         # Startup message
         startup_msg,
         # Nodes

@@ -14,3 +14,6 @@
     
     # Default VLM prompt
     prompt: "Describe what you see in this image and identify any objects that could be grasped by a robot."
+    
+    # Show CV window with camera feed and VLM results
+    show_preview: true
