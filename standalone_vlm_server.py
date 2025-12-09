@@ -24,6 +24,7 @@ import os
 import time
 import argparse
 from typing import Optional
+from pathlib import Path
 
 # Memory optimization
 os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128,expandable_segments:True'
@@ -43,10 +44,12 @@ class StandaloneVLMServer:
     """
     
     def __init__(self, model_id: str = 'vikhyatk/moondream2', 
-                 quantization: str = '8bit', device: str = 'cuda'):
+                 quantization: str = '8bit', device: str = 'cuda',
+                 model_cache_dir: Optional[str] = None):
         self.model_id = model_id
         self.quantization = quantization
         self.device = device
+        self.model_cache_dir = model_cache_dir
         self.model = None
         self.tokenizer = None
         self.inference_count = 0
@@ -55,6 +58,10 @@ class StandaloneVLMServer:
         print(f'  Model: {self.model_id}')
         print(f'  Quantization: {self.quantization}')
         print(f'  Device: {self.device}')
+        if self.model_cache_dir:
+            print(f'  Local Cache: {self.model_cache_dir} (OFFLINE MODE)')
+        else:
+            print(f'  Mode: Online (will download from HuggingFace)')
         
         self.load_model()
         print('VLM Server ready!')
@@ -66,9 +73,23 @@ class StandaloneVLMServer:
         print('Loading Moondream2 VLM...')
         cleanup_memory()
         
+        # Determine model path (local cache or HuggingFace)
+        if self.model_cache_dir:
+            model_path = Path(self.model_cache_dir).expanduser().resolve()
+            if not model_path.exists():
+                raise ValueError(f"Model cache directory does not exist: {model_path}")
+            print(f'Using local model cache: {model_path}')
+            model_source = str(model_path)
+            local_files_only = True
+        else:
+            print(f'Downloading from HuggingFace: {self.model_id}')
+            model_source = self.model_id
+            local_files_only = False
+        
         load_kwargs = {
             'trust_remote_code': True,
             'low_cpu_mem_usage': True,
+            'local_files_only': local_files_only,
         }
         
         # Apply quantization settings
@@ -97,12 +118,16 @@ class StandaloneVLMServer:
         
         # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
+            model_source,
             **load_kwargs
         )
         
         # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_source,
+            trust_remote_code=True,
+            local_files_only=local_files_only
+        )
         
         # Jetson stability patch for vision encoder
         if hasattr(self.model, 'vision_encoder'):
@@ -231,7 +256,9 @@ def main():
                        help='Quantization mode (default: 8bit)')
     parser.add_argument('--device', type=str, default='cuda',
                        choices=['cuda', 'cpu'],
-                       help='Device (default: cuda)')
+                       help='Device to run on (default: cuda)')
+    parser.add_argument('--model-cache-dir', type=str, default=None,
+                       help='Path to pre-downloaded model cache (for offline use)')
     
     args = parser.parse_args()
     
@@ -240,7 +267,8 @@ def main():
     vlm_server = StandaloneVLMServer(
         model_id=args.model,
         quantization=args.quantization,
-        device=args.device
+        device=args.device,
+        model_cache_dir=args.model_cache_dir
     )
     
     # Start Flask server
