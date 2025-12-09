@@ -139,31 +139,27 @@ class Moondream2VLM:
     
     def load(self):
         """Load Moondream2 with 8-bit quantization for Jetson"""
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        from transformers import AutoModelForCausalLM, AutoTokenizer
         
         self.logger.info('Loading Moondream2 VLM (8-bit optimized)...')
         cleanup_memory()
         
         model_id = "vikhyatk/moondream2"
         
-        # 8-bit quantization config for Jetson
-        self.logger.info('Applying 8-bit quantization config for Jetson...')
-        # Python 3.8 compatibility: Create config dict first, then unpack
-        bnb_config_dict = {
-            "load_in_8bit": True,
-            "llm_int8_enable_fp32_cpu_offload": True,
-            "llm_int8_skip_modules": ["vision_encoder", "vision", "input_layernorm"]
-        }
-        bnb_config = BitsAndBytesConfig(**bnb_config_dict)
+        # 8-bit quantization for Jetson Xavier NX
+        # Python 3.8 compatible: Pass parameters directly without BitsAndBytesConfig
+        self.logger.info('Applying 8-bit quantization for Jetson...')
         
         self.logger.info('Loading model weights...')
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
             trust_remote_code=True,
-            quantization_config=bnb_config,
+            load_in_8bit=True,
             device_map="auto",
             low_cpu_mem_usage=True,
-            torch_dtype=torch.float16
+            torch_dtype=torch.float16,
+            llm_int8_enable_fp32_cpu_offload=True,
+            llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
         )
         
         self.logger.info('Loading tokenizer...')
