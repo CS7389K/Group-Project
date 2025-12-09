@@ -24,11 +24,8 @@ import os
 def preload_libraries():
     """Preload problematic libraries for Jetson TLS fix"""
     lib_paths = [
-        '/usr/lib/aarch64-linux-gnu/libgomp.so.1',
-        '/usr/lib/aarch64-linux-gnu/libopenblas.so.0',
-        '/usr/lib/aarch64-linux-gnu/libGLdispatch.so.0',
-        # Fallback paths
-        '/usr/lib/libgomp.so.1',
+        '/home/nvidia/.local/lib/python3.8/site-packages/torch.libs/libgomp-804f19d4.so.1.0.0',
+        '/home/nvidia/.local/lib/python3.8/site-packages/tensorflow_cpu_aws.libs/libgomp-cc9055c7.so.1.0.0',
     ]
     
     for lib_path in lib_paths:
@@ -406,60 +403,6 @@ class VLMReasonerNode(Node):
         self.get_logger().info('🚀 VLM REASONING NODE READY')
         self.get_logger().info('=' * 70)
     
-    # def image_callback(self, msg: Image):
-    #     """Process incoming camera frames"""
-    #     self.frame_count += 1
-        
-    #     try:
-    #         # Convert ROS Image to OpenCV
-    #         cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-    #         pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
-            
-    #         # 1. Object Detection (YOLO - Fast)
-    #         detections = []
-    #         if self.use_yolo and self.yolo:
-    #             results = self.yolo(cv_image, verbose=False)
-    #             for r in results:
-    #                 for box in r.boxes:
-    #                     conf = float(box.conf[0])
-    #                     if conf > self.detection_threshold:
-    #                         cls_id = int(box.cls[0])
-    #                         class_name = self.yolo.names[cls_id]
-    #                         bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
-                            
-    #                         detections.append(Detection(
-    #                             class_name=class_name,
-    #                             confidence=conf,
-    #                             bbox=bbox,
-    #                             timestamp=time.time()
-    #                         ))
-            
-    #         # Update detection state
-    #         self.current_detection = detections[0] if detections else None
-            
-    #         # 2. VLM Reasoning (Throttled to target Hz)
-    #         current_time = time.time()
-    #         if (self.current_detection and 
-    #             current_time - self.last_analysis_time >= self.analysis_interval):
-                
-    #             self.last_analysis_time = current_time
-                
-    #             # Analyze with VLM
-    #             properties, analysis_time = self.vlm.analyze_object(
-    #                 pil_image, self.current_detection
-    #             )
-                
-    #             # Make decision
-    #             self.current_reasoning = self.fusion.decide(
-    #                 self.current_detection, properties, analysis_time
-    #             )
-            
-    #         # 3. Display Dashboard (every frame)
-    #         self.display_dashboard()
-            
-    #     except Exception as e:
-    #         self.get_logger().error(f'Image callback error: {e}', throttle_duration_sec=5.0)
-
     def image_callback(self, msg: Image):
         """Process incoming camera frames"""
         self.frame_count += 1
@@ -469,28 +412,48 @@ class VLMReasonerNode(Node):
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
 
+            # Create a copy for visualization
+            display_image = cv_image.copy()
+
             # 1. Object Detection (YOLO - Fast)
             detections = []
             if self.use_yolo and self.yolo:
                 with torch.no_grad():
                     results = self.yolo(cv_image, verbose=False)
+                
+                # Debug: Print detection results
+                print(f"\n[DEBUG] Frame {self.frame_count} - YOLO Detections:")
+                
                 for r in results:
                     for box in r.boxes:
                         conf = float(box.conf[0])
+                        cls_id = int(box.cls[0])
+                        class_name = self.yolo.names[cls_id]
+                        bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
+                        
+                        # Debug print all detections
+                        print(f"  - {class_name}: {conf:.2%} @ {bbox}")
+                        
                         if conf > self.detection_threshold:
-                            cls_id = int(box.cls[0])
-                            class_name = self.yolo.names[cls_id]
-                            bbox = box.xyxy[0].cpu().numpy().astype(int).tolist()
-
                             detections.append(Detection(
                                 class_name=class_name,
                                 confidence=conf,
                                 bbox=bbox,
                                 timestamp=time.time()
                             ))
+                            
+                            # Draw bounding box on display image
+                            x1, y1, x2, y2 = bbox
+                            cv2.rectangle(display_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                            label = f"{class_name}: {conf:.2f}"
+                            cv2.putText(display_image, label, (x1, y1 - 10),
+                                      cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                
+                print(f"  Total detections above threshold: {len(detections)}")
 
             # Update detection state
             self.current_detection = detections[0] if detections else None
+
 
             # 2. VLM Reasoning (Throttled to target Hz)
             current_time = time.time()
@@ -509,6 +472,10 @@ class VLMReasonerNode(Node):
                 self.current_reasoning = self.fusion.decide(
                     self.current_detection, properties, analysis_time
                 )
+
+            # Display image with detections
+            cv2.imshow('YOLO Detection', display_image)
+            cv2.waitKey(1)
 
             # 3. Display Dashboard (every frame)
             self.display_dashboard()
