@@ -15,6 +15,34 @@ Features:
 - Jetson Xavier NX optimized (8-bit quantization)
 """
 
+# CRITICAL: Preload libraries to fix "cannot allocate memory in static TLS block" on Jetson
+import ctypes
+import sys
+import os
+
+# Try to preload OpenBLAS/OpenMP libraries before any heavy imports
+def preload_libraries():
+    """Preload problematic libraries for Jetson TLS fix"""
+    lib_paths = [
+        '/usr/lib/aarch64-linux-gnu/libgomp.so.1',
+        '/usr/lib/aarch64-linux-gnu/libopenblas.so.0',
+        '/usr/lib/aarch64-linux-gnu/libGLdispatch.so.0',
+        # Fallback paths
+        '/usr/local/lib/libgomp.so.1',
+        '/usr/lib/libgomp.so.1',
+    ]
+    
+    for lib_path in lib_paths:
+        if os.path.exists(lib_path):
+            try:
+                ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
+                print(f"[Preload] ✓ {lib_path}")
+            except Exception as e:
+                print(f"[Preload] ✗ {lib_path}: {e}")
+
+# Run preload before any other imports
+preload_libraries()
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
