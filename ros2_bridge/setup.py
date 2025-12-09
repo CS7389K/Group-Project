@@ -29,6 +29,7 @@ setup(
             'vlm_server = vlm_bridge.vlm_server:main',
             'vlm_client = vlm_bridge.vlm_client:main',
             'ros2_network_bridge = vlm_bridge.ros2_network_bridge:main',
+            'camera_publisher = vlm_bridge.camera_publisher:main',
         ],
     },
 )
