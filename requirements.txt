@@ -3,7 +3,7 @@
 
 # Core ML frameworks
 torch>=1.10.0
-transformers>=4.30.0
+transformers>=4.30.0,<4.46.0  # Pin <4.46.0 for Python 3.8 compatibility (see: huggingface/transformers#34370)
 
 # Computer Vision
 opencv-python>=4.5.0
