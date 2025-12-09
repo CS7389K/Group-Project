@@ -1,23 +1,62 @@
 # TurtleBot3 VLM Perception System
 
-[![ROS2](https://img.shields.io/badge/ROS2-Foxy-blue.svg)](https://docs.ros.org/en/foxy/)
+[![ROS2](https://img.shields.io/badge/ROS2-Humble-blue.svg)](https://docs.ros.org/en/humble/)
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04-orange.svg)](https://ubuntu.com/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20%7C%2022.04-orange.svg)](https://ubuntu.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > A hybrid vision-language perception system for TurtleBot3 mobile manipulation, combining YOLO11 object detection with Moondream2 VLM reasoning on Jetson Xavier NX.
 
+## 🚀 Quick Start
+
+### Option 1: Network Bridge (Recommended for Remote Inference)
+
+**TurtleBot3 with ROS2 → Remote Computer without ROS2**
+
+```bash
+# On Remote Computer (NO ROS2 needed):
+git clone https://github.com/CS7389K/Group-Project.git
+cd Group-Project
+pip3 install -r standalone_requirements.txt
+python3 standalone_vlm_server.py --device cuda --port 5000
+
+# On TurtleBot3 Jetson:
+git clone https://github.com/CS7389K/Group-Project.git ~/moondream2_turtlebot3
+cd ~/moondream2_turtlebot3
+./tools/install_jetson.sh
+source ~/ros2_ws/install/setup.bash
+ros2 launch vlm_bridge network_bridge.launch.py vlm_server_url:=http://192.168.1.100:5000
+```
+
+See [NETWORK_BRIDGE_GUIDE.md](NETWORK_BRIDGE_GUIDE.md) for detailed instructions.
+
+### Option 2: Standalone VLM on Jetson
+
+**All-in-one on Jetson Xavier NX**
+
+```bash
+# On Jetson Xavier NX - One command installation
+git clone https://github.com/CS7389K/Group-Project.git ~/moondream2_turtlebot3
+cd ~/moondream2_turtlebot3
+./tools/install_jetson.sh
+
+# Launch the system
+source ~/ros2_ws/install/setup.bash
+ros2 launch vlm_bridge vlm_bridge.launch.py
+```
+
+See [QUICKSTART.md](QUICKSTART.md) for detailed quick start guide.
+
 ## Table of Contents
 
 - [Overview](#overview)
-- [Prerequisites](#prerequisites)
+- [Features](#features)
 - [Installation](#installation)
-- [Building](#building)
-- [Running](#running)
+- [Packages](#packages)
+- [Usage](#usage)
 - [System Architecture](#system-architecture)
 - [Performance](#performance)
-- [Known Issues](#known-issues)
-- [Resources](#resources)
+- [Documentation](#documentation)
 - [License](#license)
 
 ## Overview
@@ -34,68 +73,160 @@ The system enables autonomous manipulation decisions by understanding:
 - Graspability and manipulation feasibility
 - Risk assessment for collision avoidance
 
-### Project Documentation
+## Features
 
+✅ **Three Deployment Options**
+- **Network Bridge**: ROS2 on TurtleBot3 → HTTP → Remote VLM (no ROS2 on inference machine)
+- **Standalone VLM Bridge**: ROS2 VLM server on Jetson
+- **Complete Perception Stack**: Camera + YOLO + VLM all on Jetson
+
+✅ **Flexible Architecture**
+- Run VLM inference on remote computer WITHOUT ROS2
+- Or run everything on Jetson Xavier NX
+- Network bridge for distributed computing
+
+✅ **Jetson-Optimized**
+- 8-bit and 4-bit quantization support
+- Memory-efficient CUDA allocation
+- Automatic library preloading for TLS issues
+
+✅ **Easy Installation**
+- One-command installation script
+- Automatic workspace setup
+- Pre-download model support
+
+✅ **Flexible Deployment**
+- Launch files with configurable parameters
+- HTTP REST API for inference
+- Real-time performance monitoring
+
+## Documentation
+
+- 🌐 [**Network Bridge Guide**](NETWORK_BRIDGE_GUIDE.md) - **NEW!** Run VLM on remote computer without ROS2
+- 📖 [Installation Guide](INSTALL.md) - Complete installation instructions
+- 🚀 [Quick Start Guide](QUICKSTART.md) - Get started in minutes
+- 📦 [Package Overview](PACKAGE_OVERVIEW.md) - Detailed package documentation
+- 🤖 [VLM Bridge README](ros2_bridge/README.md) - VLM server package details
 - 📄 [Overleaf Report](https://www.overleaf.com/8494251454nmnssbytfkyk#ee7bf5) (Requires Access)
-- 📦 [Package Overview](PACKAGE_OVERVIEW.md)
 
 ## Prerequisites
 
-- **Operating System**: Ubuntu 20.04 LTS
-- **ROS2**: Foxy
+- **Operating System**: Ubuntu 20.04 or 22.04 LTS
+- **ROS2**: Humble (Foxy also supported)
 - **Python**: 3.8+
 - **Hardware**: 
   - TurtleBot3 (Burger/Waffle/Waffle Pi)
-  - Nvidia Jetson Xavier NX 8GB
-  - Raspberry Pi Camera Module v2 or HQ
+  - NVIDIA Jetson Xavier NX 8GB
+  - USB Camera or Raspberry Pi Camera Module
   - OpenMANIPULATOR-X (optional)
 
 ## Installation
 
-### 1. Clone the Repository
+### Automated Installation (Recommended)
 
 ```bash
-git clone https://github.com/CS7389K/Group-Project.git
-cd Group-Project
+# Clone the repository on Jetson
+git clone https://github.com/CS7389K/Group-Project.git ~/moondream2_turtlebot3
+cd ~/moondream2_turtlebot3
+
+# Run installation script
+chmod +x tools/install_jetson.sh
+./tools/install_jetson.sh
 ```
 
-### 2. Install ROS2 Foxy
+The script automatically:
+1. Installs system dependencies (ROS2 packages, v4l-utils, etc.)
+2. Installs PyTorch for Jetson Xavier NX
+3. Installs Python dependencies (transformers, YOLO, etc.)
+4. Creates and configures ROS2 workspace
+5. Builds both packages (`vlm_bridge` and `turtlebot3_vlm_perception`)
+6. Sets up environment variables
 
-Follow the [official ROS2 Foxy installation guide](https://docs.ros.org/en/foxy/Installation/Ubuntu-Install-Debians.html).
+### Manual Installation
 
-### 3. Install Dependencies
+See [INSTALL.md](INSTALL.md) for step-by-step manual installation instructions.
 
-Navigate to the perception package and run the setup script:
+## Packages
 
+This repository contains two installable ROS2 packages:
+
+### 1. `vlm_bridge` - VLM Inference Server
+
+Location: `ros2_bridge/`
+
+A standalone ROS2 package providing Moondream2 VLM inference as a service.
+
+**Nodes:**
+- `vlm_server`: Runs VLM model and provides inference
+- `vlm_client`: Example client for testing
+
+**Topics:**
+- Subscribes: `/camera/image_raw` (sensor_msgs/Image)
+- Publishes: `/vlm/response` (std_msgs/String)
+
+**Launch:**
 ```bash
-cd src/perception
-chmod +x install.sh
-./install.sh
+ros2 launch vlm_bridge vlm_bridge.launch.py
+ros2 launch vlm_bridge vlm_bridge.launch.py quantization:=4bit
+ros2 launch vlm_bridge vlm_bridge.launch.py with_client:=true
 ```
 
-This will:
-- Create/setup ROS2 workspace
-- Install system dependencies
-- Install Python packages (PyTorch, Ultralytics, Moondream2, etc.)
-- Build the ROS2 package
+See [ros2_bridge/README.md](ros2_bridge/README.md) for details.
 
-### 4. Enable Jetson Performance Mode
+### 2. `turtlebot3_vlm_perception` - Complete Perception Stack
 
-For optimal performance on Jetson Xavier NX:
+Location: `src/perception/`
 
+Full perception system integrating camera, YOLO detection, and VLM reasoning.
+
+**Nodes:**
+- `camera_publisher`: V4L2 camera interface
+- `vlm_reasoner`: YOLO + Moondream2 hybrid reasoning
+
+**Launch:**
 ```bash
-sudo nvpmodel -m 0
-sudo jetson_clocks
+ros2 launch turtlebot3_vlm_perception camera_only.launch.py
+ros2 launch turtlebot3_vlm_perception vlm.launch.py
 ```
 
-## Building
+## Usage
 
-Navigate to your ROS2 workspace and build:
+### Option 1: VLM Server Only
 
+Launch standalone VLM server:
 ```bash
-cd ~/ros2_ws
-colcon build --packages-select turtlebot3_vlm_perception
-source install/setup.bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch vlm_bridge vlm_bridge.launch.py
+```
+
+With test client:
+```bash
+ros2 launch vlm_bridge vlm_bridge.launch.py with_client:=true prompt:="What do you see?"
+```
+
+### Option 2: Complete Perception System
+
+Launch full stack with camera + YOLO + VLM:
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 launch turtlebot3_vlm_perception vlm.launch.py
+```
+
+This will display:
+- Live camera feed with YOLO detections (OpenCV window)
+- Real-time reasoning dashboard (terminal)
+- Object properties and manipulation decisions
+
+### Option 3: Camera Only
+
+Test camera setup:
+```bash
+ros2 launch turtlebot3_vlm_perception camera_only.launch.py
+```
+
+View with rqt:
+```bash
+ros2 run rqt_image_view rqt_image_view
 ```
 
 For development with symlink install:

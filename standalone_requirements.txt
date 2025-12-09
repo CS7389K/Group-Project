@@ -1,0 +1,25 @@
+# Python Dependencies for Standalone VLM Server
+# NO ROS2 REQUIRED - Can run on any machine with Python + PyTorch
+#
+# Install with: pip3 install -r standalone_requirements.txt
+
+# Core dependencies
+torch>=1.10.0
+transformers>=4.30.0,<4.46.0  # Python 3.8 compatible
+pillow>=9.0.0
+
+# HTTP server
+flask>=2.0.0
+
+# Quantization (optional, for GPU memory optimization)
+bitsandbytes>=0.41.0
+accelerate>=0.20.0
+
+# For CPU installation of PyTorch:
+#   pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+#
+# For CUDA 11.8:
+#   pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+#
+# For Jetson Xavier NX:
+#   Use official Jetson PyTorch wheel from NVIDIA forums

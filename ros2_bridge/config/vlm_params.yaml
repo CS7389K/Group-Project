@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    # VLM Server Parameters
+    model_id: "vikhyatk/moondream2"
+    quantization: "8bit"  # Options: 8bit, 4bit, none
+    device: "cuda"  # Options: cuda, cpu
+    
+    # Query Parameters
+    query_rate: 2.0  # Hz - how often to run VLM inference
+    
+    # Client Parameters (for testing)
+    prompt: "Describe what you see in this image."

@@ -17,3 +17,7 @@ accelerate>=0.20.0
 
 # System monitoring
 psutil>=5.8.0
+
+# Network bridge dependencies
+requests>=2.25.0  # For HTTP client on TurtleBot3
+flask>=2.0.0      # For standalone VLM server (if running locally)

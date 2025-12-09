@@ -1,0 +1,16 @@
+# Network Bridge Configuration
+# For ROS2-Network Bridge running on TurtleBot3
+
+/**:
+  ros__parameters:
+    # Remote VLM Server URL (change to your inference machine's IP)
+    vlm_server_url: "http://192.168.1.100:5000"
+    
+    # Inference rate (Hz) - how often to send images
+    inference_rate: 2.0
+    
+    # HTTP request timeout (seconds)
+    timeout: 10.0
+    
+    # Default VLM prompt
+    prompt: "Describe what you see in this image and identify any objects that could be grasped by a robot."
