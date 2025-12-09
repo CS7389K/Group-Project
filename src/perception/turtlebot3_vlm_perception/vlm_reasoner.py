@@ -17,10 +17,8 @@ Features:
 
 # CRITICAL: Preload libraries to fix "cannot allocate memory in static TLS block" on Jetson
 import ctypes
-import sys
 import os
 
-# Try to preload OpenBLAS/OpenMP libraries before any heavy imports
 def preload_libraries():
     """Preload problematic libraries for Jetson TLS fix"""
     lib_paths = [
@@ -32,11 +30,11 @@ def preload_libraries():
         if os.path.exists(lib_path):
             try:
                 ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
-                print(f"[Preload] ✓ {lib_path}")
+                print(f"[Preload] SUCCESS: {lib_path}")
             except Exception as e:
-                print(f"[Preload] ✗ {lib_path}: {e}")
+                print(f"[Preload] FAILED: {lib_path}: {e}")
 
-# Run preload before any other imports
+# CRITICAL: Run preload before any other imports
 preload_libraries()
 
 import rclpy
@@ -136,7 +134,6 @@ class Moondream2VLM:
         self.logger = logger
         self.model = None
         self.tokenizer = None
-        self.is_loaded = False
     
     def load(self):
         """Load Moondream2 with 8-bit quantization for Jetson"""
@@ -154,43 +151,30 @@ class Moondream2VLM:
             llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
         )
         
-        try:
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                trust_remote_code=True,
-                quantization_config=bnb_config,
-                device_map="auto",
-                low_cpu_mem_usage=True,
-                torch_dtype=torch.float16
-            )
-            
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-            
-            # Jetson stability patch: Keep vision encoder in FP32
-            if hasattr(self.model, 'vision_encoder'):
-                self.model.vision_encoder.to(dtype=torch.float32)
-            elif hasattr(self.model, 'vision'):
-                self.model.vision.to(dtype=torch.float32)
-            
-            self.is_loaded = True
-            self.logger.info('✅ Moondream2 loaded successfully')
-            
-        except Exception as e:
-            self.logger.error(f'Failed to load VLM: {e}')
-            self.is_loaded = False
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            trust_remote_code=True,
+            quantization_config=bnb_config,
+            device_map="auto",
+            low_cpu_mem_usage=True,
+            torch_dtype=torch.float16
+        )
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        
+        # Jetson stability patch: Keep vision encoder in FP32
+        if hasattr(self.model, 'vision_encoder'):
+            self.model.vision_encoder.to(dtype=torch.float32)
+        elif hasattr(self.model, 'vision'):
+            self.model.vision.to(dtype=torch.float32)
+        
+        self.logger.info('Moondream2 loaded successfully')
     
     def query(self, image: PILImage.Image, prompt: str) -> str:
         """Single VLM query"""
-        if not self.is_loaded:
-            return "Model not loaded"
-        
-        try:
-            cleanup_memory()
-            result = self.model.query(image, prompt)
-            return result['answer'].strip()
-        except Exception as e:
-            self.logger.error(f'VLM query error: {e}')
-            return "Error"
+        cleanup_memory()
+        result = self.model.query(image, prompt)
+        return result['answer'].strip()
     
     def analyze_object(self, image: PILImage.Image, detection: Detection) -> Tuple[PhysicalProperties, float]:
         """
@@ -283,29 +267,29 @@ class DecisionFusion:
         # Decision logic from proposal
         if properties.fragility == 'fragile':
             action = ManipulationAction.AVOID
-            reason = f"⚠️  {properties.fragility.upper()} - risk of breaking"
+            reason = f"WARNING: {properties.fragility.upper()} - risk of breaking"
             confidence = 0.90
             
         elif properties.graspable:
             action = ManipulationAction.GRASP
-            reason = (f"✓ Graspable: {properties.material}, "
+            reason = (f"Graspable: {properties.material}, "
                      f"{properties.weight_category} ({properties.weight_grams}g), "
                      f"{properties.size_mm}mm")
             confidence = 0.85
             
         elif properties.weight_grams <= self.robot.payload_g * 2 and properties.fragility == 'not_fragile':
             action = ManipulationAction.PUSH
-            reason = f"→ Can push (too large for gripper but movable)"
+            reason = "Can push (too large for gripper but movable)"
             confidence = 0.75
             
         elif properties.weight_grams > self.robot.payload_g * 2:
             action = ManipulationAction.AVOID
-            reason = f"✗ Too heavy ({properties.weight_grams}g > {self.robot.payload_g * 2}g threshold)"
+            reason = f"Too heavy ({properties.weight_grams}g > {self.robot.payload_g * 2}g threshold)"
             confidence = 0.80
             
         else:
             action = ManipulationAction.STOP
-            reason = "? Uncertain - need more information"
+            reason = "Uncertain - need more information"
             confidence = 0.50
         
         return ReasoningResult(
@@ -371,7 +355,7 @@ class VLMReasonerNode(Node):
             try:
                 from ultralytics import YOLO
                 self.yolo = YOLO('yolo11n.pt')
-                self.get_logger().info('✅ YOLO11n loaded')
+                self.get_logger().info('YOLO11n loaded successfully')
             except Exception as e:
                 self.get_logger().warn(f'YOLO not available: {e}')
                 self.use_yolo = False
@@ -398,9 +382,9 @@ class VLMReasonerNode(Node):
             qos_profile
         )
         
-        self.get_logger().info('✅ Subscribed to /camera/image_raw')
+        self.get_logger().info('Subscribed to /camera/image_raw')
         self.get_logger().info('=' * 70)
-        self.get_logger().info('🚀 VLM REASONING NODE READY')
+        self.get_logger().info('VLM REASONING NODE READY')
         self.get_logger().info('=' * 70)
     
     def image_callback(self, msg: Image):
@@ -458,8 +442,7 @@ class VLMReasonerNode(Node):
             # 2. VLM Reasoning (Throttled to target Hz)
             current_time = time.time()
             if (self.current_detection and 
-                current_time - self.last_analysis_time >= self.analysis_interval and
-                self.vlm.is_loaded):
+                current_time - self.last_analysis_time >= self.analysis_interval):
 
                 self.last_analysis_time = current_time
 
@@ -490,15 +473,15 @@ class VLMReasonerNode(Node):
         
         # Header
         print("=" * 70)
-        print("🤖 TURTLEBOT3 VISION-LANGUAGE REASONING DASHBOARD")
+        print("TURTLEBOT3 VISION-LANGUAGE REASONING DASHBOARD")
         print("=" * 70)
         
         # Frame info
-        print(f"\n📷 FRAME: {self.frame_count}")
+        print(f"\nFRAME: {self.frame_count}")
         
         # Detection section
         print("\n" + "─" * 70)
-        print("👁️  VISION (YOLO11 Detection)")
+        print("VISION (YOLO11 Detection)")
         print("─" * 70)
         
         if self.current_detection:
@@ -511,29 +494,29 @@ class VLMReasonerNode(Node):
         
         # Reasoning section
         print("\n" + "─" * 70)
-        print("🧠 REASONING (Moondream2 VLM)")
+        print("REASONING (Moondream2 VLM)")
         print("─" * 70)
         
         if self.current_reasoning:
             res = self.current_reasoning
-            print(f"  💭 Thought: {res.reasoning}")
-            print(f"  ⚡ Action: {res.action.value}")
-            print(f"  📊 Confidence: {res.confidence:.2%}")
-            print(f"  ⏱️  Analysis Time: {res.analysis_time_ms:.0f}ms")
+            print(f"  Thought: {res.reasoning}")
+            print(f"  Action: {res.action.value}")
+            print(f"  Confidence: {res.confidence:.2%}")
+            print(f"  Analysis Time: {res.analysis_time_ms:.0f}ms")
             
             if res.properties:
                 print("\n  Physical Properties:")
-                print(f"    • Material: {res.properties.material}")
-                print(f"    • Weight: {res.properties.weight_category} (~{res.properties.weight_grams}g)")
-                print(f"    • Size: {res.properties.size_mm}mm")
-                print(f"    • Fragility: {res.properties.fragility}")
-                print(f"    • Graspable: {'YES' if res.properties.graspable else 'NO'}")
+                print(f"    - Material: {res.properties.material}")
+                print(f"    - Weight: {res.properties.weight_category} (~{res.properties.weight_grams}g)")
+                print(f"    - Size: {res.properties.size_mm}mm")
+                print(f"    - Fragility: {res.properties.fragility}")
+                print(f"    - Graspable: {'YES' if res.properties.graspable else 'NO'}")
         else:
             print("  Status: Waiting for detection...")
         
         # System info
         print("\n" + "─" * 70)
-        print("💻 SYSTEM STATUS")
+        print("SYSTEM STATUS")
         print("─" * 70)
         
         mem = psutil.virtual_memory()
