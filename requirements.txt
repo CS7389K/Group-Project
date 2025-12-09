@@ -1,9 +1,10 @@
 # Python Dependencies for TurtleBot3 VLM Perception
 # Install with: pip3 install -r requirements.txt
 
-# Core ML frameworks
 torch>=1.10.0
-transformers>=4.30.0,<4.46.0  # Pin <4.46.0 for Python 3.8 compatibility (see: huggingface/transformers#34370)
+# Pin <4.46.0 for Python 3.8 compatibility 
+# see: https://github.com/huggingface/transformers/issues/34370
+transformers>=4.30.0,<4.46.0  
 
 # Computer Vision
 opencv-python>=4.5.0
@@ -16,9 +17,3 @@ accelerate>=0.20.0
 
 # System monitoring
 psutil>=5.8.0
-
-# ROS2 dependencies (installed via apt, listed for reference)
-# sudo apt install ros-foxy-cv-bridge
-# sudo apt install python3-opencv
-# sudo apt install ros-foxy-sensor-msgs
-# sudo apt install ros-foxy-std-msgs
