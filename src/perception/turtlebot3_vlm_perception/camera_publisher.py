@@ -80,56 +80,16 @@ class CameraPublisher(Node):
         self.bridge = CvBridge()
         self.frame_count = 0
         
-        # Timer for publishing
-        self.timer = self.create_timer(1.0 / fps, self.timer_callback)
-        
-        self.get_logger().info(f'Publishing to /camera/image_raw at {fps} Hz')
+        self.get_logger().info(f'Ready to publish to /camera/image_raw at {fps} Hz')
     
-    # def timer_callback(self):
-    #     """Capture and publish camera frame"""
-    #     ret, frame = self.cap.read()
+    def step(self):
+        """Capture and publish camera frame - call this in a loop"""
+        # Check if camera is still open
+        if not self.capture.isOpened():
+            self.get_logger().error("Camera is not open!")
+            return
         
-    #     if not ret:
-    #         self.get_logger().warn('Failed to capture frame', throttle_duration_sec=5.0)
-    #         return
-        
-    #     # Check if frame is valid (not all white/black)
-    #     if frame is None or frame.size == 0:
-    #         self.get_logger().warn('Empty frame received', throttle_duration_sec=5.0)
-    #         return
-            
-    #     try:
-    #         # Convert to ROS Image message
-    #         msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-    #         msg.header.stamp = self.get_clock().now().to_msg()
-    #         msg.header.frame_id = 'camera_link'
-            
-    #         self.publisher.publish(msg)
-            
-    #         self.frame_count += 1
-    #         if self.frame_count % 300 == 0:  # Log every 10 seconds at 30 FPS
-    #             self.get_logger().info(f'Published {self.frame_count} frames')
-            
-    #         # Debug: Log first frame stats
-    #         if self.frame_count == 1:
-    #             import numpy as np
-    #             self.get_logger().info(f'First frame stats: shape={frame.shape}, '
-    #                                   f'mean={np.mean(frame):.1f}, '
-    #                                   f'min={np.min(frame)}, max={np.max(frame)}')
-                
-    #     except Exception as e:
-    #         self.get_logger().error(f'Error publishing frame: {e}')
-    
-    # def __del__(self):
-    #     """Cleanup on shutdown"""
-    #     if hasattr(self, 'cap') and self.cap.isOpened():
-    #         self.cap.release()
-    #         self.get_logger().info('Camera released')
-    
-    def timer_callback(self):
-        """Capture and publish camera frame"""
         ret, frame = self.capture.read()
-
         if not ret:
             self.get_logger().warn('Failed to capture frame')
             return
@@ -160,27 +120,47 @@ class CameraPublisher(Node):
         except Exception as e:
             self.get_logger().error(f'Error publishing frame: {e}')
     
+    def shutdown(self):
+        """Clean up resources."""
+        self.get_logger().info("Shutting down Camera Publisher...")
+        
+        # Release camera capture
+        if self.capture is not None and self.capture.isOpened():
+            self.capture.release()
+            self.get_logger().info("Camera released")
+            import time
+            time.sleep(0.5)
+        
+        self.get_logger().info("Camera Publisher shutdown complete.")
+    
     def __del__(self):
-        """Cleanup on shutdown"""
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            self.cap.release()
-            self.get_logger().info('Camera released')
+        """Destructor to ensure cleanup happens even if shutdown() isn't called."""
+        try:
+            if hasattr(self, 'capture') and self.capture is not None:
+                if self.capture.isOpened():
+                    self.capture.release()
+        except Exception:
+            pass  # Ignore errors during cleanup
 
 
 def main(args=None):
     """Main entry point"""
     rclpy.init(args=args)
-    
+    publisher = CameraPublisher()
+        
     try:
-        node = CameraPublisher()
-        rclpy.spin(node)
+        while rclpy.ok():
+            publisher.step()
+            rclpy.spin_once(publisher, timeout_sec=0.01)
     except KeyboardInterrupt:
-        pass
+        print("\nShutting down Camera Publisher...")
     except Exception as e:
-        print(f'Error: {e}')
+        print(f"Error in Camera Publisher: {e}")
     finally:
-        if rclpy.ok():
-            rclpy.shutdown()
+        if publisher:
+            publisher.shutdown()
+            publisher.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':

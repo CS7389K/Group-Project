@@ -6,6 +6,7 @@ Shows the camera feed in an OpenCV window
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -16,12 +17,19 @@ class ImageViewer(Node):
         super().__init__('image_viewer')
         self.bridge = CvBridge()
         
+        # QoS Profile: Match publisher's BEST_EFFORT settings
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
         # Subscribe to camera topic
         self.subscription = self.create_subscription(
             Image,
             '/camera/image_raw',
             self.image_callback,
-            10
+            qos_profile
         )
         
         self.get_logger().info('Image Viewer Started - Press Q to quit')
