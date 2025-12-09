@@ -145,12 +145,14 @@ class Moondream2VLM:
         model_id = "vikhyatk/moondream2"
         
         # 8-bit quantization config for Jetson
+        self.logger.info('Applying 8-bit quantization config for Jetson...')
         bnb_config = BitsAndBytesConfig(
             load_in_8bit=True,
             llm_int8_enable_fp32_cpu_offload=True,
             llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
         )
         
+        self.logger.info('Loading model weights...')
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
             trust_remote_code=True,
@@ -160,12 +162,15 @@ class Moondream2VLM:
             torch_dtype=torch.float16
         )
         
+        self.logger.info('Loading tokenizer...')
         self.tokenizer = AutoTokenizer.from_pretrained(model_id)
         
         # Jetson stability patch: Keep vision encoder in FP32
         if hasattr(self.model, 'vision_encoder'):
+            self.logger.info('Applying Jetson FP32 patch to vision encoder...')
             self.model.vision_encoder.to(dtype=torch.float32)
         elif hasattr(self.model, 'vision'):
+            self.logger.info('Applying Jetson FP32 patch to vision module...')
             self.model.vision.to(dtype=torch.float32)
         
         self.logger.info('Moondream2 loaded successfully')
