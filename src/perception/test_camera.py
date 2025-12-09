@@ -30,4 +30,4 @@ if not ok:
     print("Failed to read frame from camera")
 else:
     cv2.imshow('YOLO Detection', frame)
-    cv2.waitKey(1)  # Process events to keep window responsive
+    cv2.waitKey(-1)  # Process events to keep window responsive
