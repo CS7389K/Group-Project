@@ -34,12 +34,6 @@ def generate_launch_description():
     """Generate complete launch description"""
     
     # Camera arguments
-    camera_device_arg = DeclareLaunchArgument(
-        'camera_device',
-        default_value='0',
-        description='Camera device number (/dev/videoX)'
-    )
-    
     camera_width_arg = DeclareLaunchArgument(
         'camera_width',
         default_value='640',
@@ -55,7 +49,13 @@ def generate_launch_description():
     camera_fps_arg = DeclareLaunchArgument(
         'camera_fps',
         default_value='30',
-        description='Camera FPS'
+        description='Camera frame rate'
+    )
+    
+    flip_method_arg = DeclareLaunchArgument(
+        'flip_method',
+        default_value='0',
+        description='Image flip method (0=none, 2=rotate-180)'
     )
     
     show_camera_preview_arg = DeclareLaunchArgument(
@@ -103,11 +103,11 @@ def generate_launch_description():
             '  Complete Network Bridge System\n',
             '========================================================\n',
             'Starting:\n',
-            '  1. Camera Publisher -> /camera/image_raw\n',
+            '  1. Camera Publisher (GStreamer) -> /camera/image_raw\n',
             '  2. ROS2-Network Bridge -> VLM Server\n',
             '\n',
             'VLM Server URL: ', LaunchConfiguration('vlm_server_url'), '\n',
-            'Camera Device: /dev/video', LaunchConfiguration('camera_device'), '\n',
+            'Camera: Jetson RPi Camera (nvarguscamerasrc)\n',
             '\n',
             'Topics:\n',
             '  - Published: /camera/image_raw (sensor_msgs/Image)\n',
@@ -127,10 +127,10 @@ def generate_launch_description():
         name='camera_publisher',
         output='screen',
         parameters=[{
-            'device': LaunchConfiguration('camera_device'),
-            'width': LaunchConfiguration('camera_width'),
-            'height': LaunchConfiguration('camera_height'),
-            'fps': LaunchConfiguration('camera_fps'),
+            'camera_width': LaunchConfiguration('camera_width'),
+            'camera_height': LaunchConfiguration('camera_height'),
+            'camera_fps': LaunchConfiguration('camera_fps'),
+            'flip_method': LaunchConfiguration('flip_method'),
             'show_preview': LaunchConfiguration('show_camera_preview'),
         }]
     )
@@ -152,10 +152,10 @@ def generate_launch_description():
     
     return LaunchDescription([
         # Arguments
-        camera_device_arg,
         camera_width_arg,
         camera_height_arg,
         camera_fps_arg,
+        flip_method_arg,
         show_camera_preview_arg,
         vlm_server_url_arg,
         inference_rate_arg,

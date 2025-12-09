@@ -1,18 +1,15 @@
 #!/usr/bin/env python3
 """
-Camera Publisher Node for Network Bridge
-=========================================
-Simple V4L2 camera publisher for the network bridge package.
-Publishes images to /camera/image_raw for the ROS2-Network Bridge.
+Camera Publisher Node for TurtleBot3 + Jetson Xavier NX
+========================================================
+Publishes RPi Camera v2/HQ images using hardware-accelerated GStreamer pipeline.
 
-This is a self-contained camera node - no external dependencies needed!
+Topic: /camera/image_raw (sensor_msgs/Image)
+Rate: 30 Hz
+Hardware: Jetson Xavier NX + Raspberry Pi Camera Module v2/HQ
 
-Usage:
-    ros2 run vlm_bridge camera_publisher
-    ros2 run vlm_bridge camera_publisher --ros-args -p device:=1
+Based on working implementation from CS7389K/Milestone-4
 """
-
-from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
@@ -20,142 +17,143 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
-import time
 
 
 class CameraPublisherNode(Node):
-    """Simple camera publisher using OpenCV VideoCapture"""
+    """
+    Hardware-accelerated camera publisher using nvarguscamerasrc.
+    Optimized for TurtleBot3 on Jetson Xavier NX.
+    """
     
     def __init__(self):
         super().__init__('camera_publisher')
         
         # Declare parameters
-        self.declare_parameter('device', 0)  # /dev/video0
-        self.declare_parameter('width', 640)
-        self.declare_parameter('height', 480)
-        self.declare_parameter('fps', 30)
+        self.declare_parameter('camera_width', 640)
+        self.declare_parameter('camera_height', 480)
+        self.declare_parameter('camera_fps', 30)
+        self.declare_parameter('flip_method', 0)
         self.declare_parameter('show_preview', False)
         
         # Get parameters
-        device = self.get_parameter('device').value
-        width = self.get_parameter('width').value
-        height = self.get_parameter('height').value
-        fps = self.get_parameter('fps').value
+        width = self.get_parameter('camera_width').value
+        height = self.get_parameter('camera_height').value
+        fps = self.get_parameter('camera_fps').value
+        flip = self.get_parameter('flip_method').value
         self.show_preview = self.get_parameter('show_preview').value
         
-        self.get_logger().info('Initializing Camera Publisher...')
-        self.get_logger().info(f'  Device: /dev/video{device}')
-        self.get_logger().info(f'  Resolution: {width}x{height}')
-        self.get_logger().info(f'  FPS: {fps}')
+        # GStreamer pipeline for Jetson Xavier NX + RPi Camera
+        gst_pipeline = (
+            'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), '
+            'width={width},height={height},framerate={fps}/1,format=NV12 ! '
+            'nvvidconv ! video/x-raw,format=BGRx,width={width},height={height} ! '
+            'videoconvert ! video/x-raw,format=BGR ! appsink drop=1'
+        ).format(width=width, height=height, fps=fps)
         
-        # Open camera
-        self.cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        self.get_logger().info('Initializing camera with GStreamer pipeline:')
+        self.get_logger().info(f'  Resolution: {width}x{height} @ {fps} FPS')
+        self.get_logger().info(f'  Flip method: {flip}')
+        self.get_logger().info(f'  Preview: {self.show_preview}')
+        self.get_logger().info(f'  Pipeline: {gst_pipeline}')
+       
+        self.capture = cv2.VideoCapture(gst_pipeline, cv2.CAP_GSTREAMER)
         
-        if not self.cap.isOpened():
-            self.get_logger().error('❌ Failed to open camera!')
-            self.get_logger().error('Troubleshooting:')
-            self.get_logger().error('  1. List cameras: ls -la /dev/video*')
-            self.get_logger().error('  2. Check permissions: sudo usermod -aG video $USER')
-            self.get_logger().error('  3. Try different device: --ros-args -p device:=1')
-            self.get_logger().error('  4. Test with: v4l2-ctl --list-devices')
-            raise RuntimeError('Camera initialization failed')
+        if not self.capture.isOpened():
+            self.get_logger().error('Failed to open camera with GStreamer!')
+            self.get_logger().error('Make sure:')
+            self.get_logger().error('  1. RPi Camera is connected to CSI port')
+            self.get_logger().error('  2. Camera is enabled in system')
+            self.get_logger().error('  3. No other process is using the camera')
+            raise RuntimeError('Could not open camera with GStreamer pipeline')
         
-        # Set camera properties
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-        self.cap.set(cv2.CAP_PROP_FPS, fps)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimize latency
-        
-        # Verify settings
-        actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        actual_fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-        
-        self.get_logger().info('✅ Camera opened successfully')
-        self.get_logger().info(f'  Actual: {actual_width}x{actual_height} @ {actual_fps} FPS')
-        
-        # QoS Profile - Best effort for real-time performance
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
             depth=1
         )
         
-        # Publisher
-        self.publisher = self.create_publisher(
-            Image,
-            '/camera/image_raw',
-            qos_profile
-        )
-        
-        # Bridge and state
+        self.publisher = self.create_publisher(Image, '/camera/image_raw', qos_profile)
         self.bridge = CvBridge()
         self.frame_count = 0
-        self.last_log_time = time.time()
         
-        # Timer for publishing
-        timer_period = 1.0 / fps
-        self.timer = self.create_timer(timer_period, self.timer_callback)
-        
-        self.get_logger().info('Camera Publisher ready!')
-        self.get_logger().info('Publishing to: /camera/image_raw')
+        self.get_logger().info('Camera opened successfully!')
+        self.get_logger().info(f'Ready to publish to /camera/image_raw at {fps} Hz')
     
-    def timer_callback(self):
-        """Read and publish camera frame"""
-        ret, frame = self.cap.read()
-        
-        if not ret:
-            self.get_logger().warn('Failed to read frame from camera')
+    def step(self):
+        """Capture and publish camera frame"""
+        if not self.capture.isOpened():
+            self.get_logger().error("Camera is not open!")
             return
         
+        ret, frame = self.capture.read()
+        if not ret or frame is None or frame.size == 0:
+            self.get_logger().warn('Failed to capture frame')
+            return
+
         try:
-            # Convert to ROS Image message
-            msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
-            msg.header.stamp = self.get_clock().now().to_msg()
-            msg.header.frame_id = 'camera_frame'
-            
-            # Publish
-            self.publisher.publish(msg)
-            self.frame_count += 1
-            
-            # Log status every 5 seconds
-            current_time = time.time()
-            if current_time - self.last_log_time >= 5.0:
-                fps = self.frame_count / (current_time - self.last_log_time)
-                self.get_logger().info(f'Publishing at {fps:.1f} FPS (frame {self.frame_count})')
-                self.last_log_time = current_time
-                self.frame_count = 0
-            
-            # Show preview if enabled
             if self.show_preview:
                 cv2.imshow('Camera Preview', frame)
                 cv2.waitKey(1)
-                
+            
+            msg = self.bridge.cv2_to_imgmsg(frame, encoding='bgr8')
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.header.frame_id = 'camera_link'
+            self.publisher.publish(msg)
+
+            self.frame_count += 1
+            if self.frame_count % 300 == 0:
+                self.get_logger().info(f'Published {self.frame_count} frames')
+
+            if self.frame_count == 1:
+                import numpy as np
+                self.get_logger().info(
+                    f'First frame stats: shape={frame.shape}, '
+                    f'mean={np.mean(frame):.1f}, '
+                    f'min={np.min(frame)}, max={np.max(frame)}'
+                )
         except Exception as e:
             self.get_logger().error(f'Error publishing frame: {e}')
     
-    def __del__(self):
-        """Cleanup on shutdown"""
-        if hasattr(self, 'cap') and self.cap.isOpened():
-            self.cap.release()
+    def shutdown(self):
+        """Clean up resources"""
+        self.get_logger().info("Shutting down Camera Publisher...")
         if self.show_preview:
             cv2.destroyAllWindows()
+        if self.capture is not None and self.capture.isOpened():
+            self.capture.release()
+            self.get_logger().info("Camera released")
+            import time
+            time.sleep(0.5)
+        self.get_logger().info("Camera Publisher shutdown complete.")
+    
+    def __del__(self):
+        """Destructor"""
+        try:
+            if hasattr(self, 'capture') and self.capture is not None:
+                if self.capture.isOpened():
+                    self.capture.release()
+        except Exception:
+            pass
 
 
 def main(args=None):
     """Main entry point"""
     rclpy.init(args=args)
-    
+    publisher = CameraPublisherNode()
+        
     try:
-        node = CameraPublisherNode()
-        rclpy.spin(node)
+        while rclpy.ok():
+            publisher.step()
+            rclpy.spin_once(publisher, timeout_sec=0.01)
     except KeyboardInterrupt:
-        print("\n\nShutting down camera...")
+        print("\nShutting down Camera Publisher...")
     except Exception as e:
-        print(f'Error: {e}')
+        print(f"Error in Camera Publisher: {e}")
     finally:
-        if rclpy.ok():
-            rclpy.shutdown()
+        if publisher:
+            publisher.shutdown()
+            publisher.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
