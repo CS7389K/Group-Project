@@ -12,7 +12,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
-        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.launch.py')),
         (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
@@ -24,9 +24,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'camera_publisher = turtlebot3_vlm_perception.camera_publisher:main',
-            'vlm_reasoner = turtlebot3_vlm_perception.vlm_reasoner:main',
-            'image_viewer = turtlebot3_vlm_perception.image_viewer:main',
+            f'camera_publisher = {package_name}.camera_publisher:main',
+            f'vlm_reasoner = {package_name}.vlm_reasoner:main',
+            f'image_viewer = {package_name}.image_viewer:main',
         ],
     },
 )

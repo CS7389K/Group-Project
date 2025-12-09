@@ -15,6 +15,9 @@ Features:
 - Jetson Xavier NX optimized (8-bit quantization)
 """
 
+# CRITICAL: Enable Python 3.8 compatibility for type annotations
+from __future__ import annotations
+
 # CRITICAL: Preload libraries to fix "cannot allocate memory in static TLS block" on Jetson
 import ctypes
 import os

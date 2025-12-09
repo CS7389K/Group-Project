@@ -46,11 +46,11 @@ class CameraPublisher(Node):
         # 3. drop=1 in appsink to prevent buffering
         self.gst_pipeline= (
             'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), ',
-            'width={image_width},height={image_height},framerate=30/1,format=NV12 ! ',
-            'nvvidconv ! video/x-raw,format=BGRx,width={image_width},height={image_height} ! ',
+            'width={{image_width}},height={{image_height}},framerate={{fps}}/1,format=NV12 ! ',
+            'nvvidconv ! video/x-raw,format=BGRx,width={{image_width}},height={{image_height}} ! ',
             'videoconvert ! video/x-raw,format=BGR ! appsink drop=1'
         )
-        self.gst_pipeline = ''.join(self.gst_pipeline).format(image_width=640, image_height=480)
+        self.gst_pipeline = ''.join(self.gst_pipeline).format(image_width=width, image_height=height, fps=fps)
         
         self.get_logger().info('Initializing camera with pipeline:')
         self.get_logger().info(f'  Resolution: {width}x{height} @ {fps} FPS')
