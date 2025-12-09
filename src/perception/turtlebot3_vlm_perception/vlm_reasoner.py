@@ -159,7 +159,7 @@ class Moondream2VLM:
             low_cpu_mem_usage=True,
             torch_dtype=torch.float16,
             llm_int8_enable_fp32_cpu_offload=True,
-            llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
+            # llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
         )
         
         self.logger.info('Loading tokenizer...')
