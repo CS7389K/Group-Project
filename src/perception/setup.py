@@ -25,7 +25,6 @@ setup(
     entry_points={
         'console_scripts': [
             'camera_publisher = turtlebot3_vlm_perception.camera_publisher:main',
-            'camera_publisher_v4l2 = turtlebot3_vlm_perception.camera_publisher_v4l2:main',
             'vlm_reasoner = turtlebot3_vlm_perception.vlm_reasoner:main',
             'image_viewer = turtlebot3_vlm_perception.image_viewer:main',
         ],
