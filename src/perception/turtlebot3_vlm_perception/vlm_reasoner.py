@@ -28,7 +28,6 @@ def preload_libraries():
         '/usr/lib/aarch64-linux-gnu/libopenblas.so.0',
         '/usr/lib/aarch64-linux-gnu/libGLdispatch.so.0',
         # Fallback paths
-        '/usr/local/lib/libgomp.so.1',
         '/usr/lib/libgomp.so.1',
     ]
     
