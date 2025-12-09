@@ -48,7 +48,6 @@ from cv_bridge import CvBridge
 import cv2
 import torch
 import gc
-import os
 import time
 import psutil
 from dataclasses import dataclass, asdict
@@ -149,11 +148,13 @@ class Moondream2VLM:
         
         # 8-bit quantization config for Jetson
         self.logger.info('Applying 8-bit quantization config for Jetson...')
-        bnb_config = BitsAndBytesConfig(
-            load_in_8bit=True,
-            llm_int8_enable_fp32_cpu_offload=True,
-            llm_int8_skip_modules=["vision_encoder", "vision", "input_layernorm"]
-        )
+        # Python 3.8 compatibility: Create config dict first, then unpack
+        bnb_config_dict = {
+            "load_in_8bit": True,
+            "llm_int8_enable_fp32_cpu_offload": True,
+            "llm_int8_skip_modules": ["vision_encoder", "vision", "input_layernorm"]
+        }
+        bnb_config = BitsAndBytesConfig(**bnb_config_dict)
         
         self.logger.info('Loading model weights...')
         self.model = AutoModelForCausalLM.from_pretrained(
