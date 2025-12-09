@@ -44,32 +44,24 @@ class CameraPublisher(Node):
         # 1. sensor-id=0 parameter
         # 2. Capture at native resolution, then scale down
         # 3. drop=1 in appsink to prevent buffering
-        self.gstreamer_pipeline = (
-            f"nvarguscamerasrc sensor-id=0 ! "
-            f"video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1 ! "
-            f"nvvidconv flip-method={flip} ! "
-            f"video/x-raw, format=BGRx, width={width}, height={height} ! "
-            f"videoconvert ! "
-            f"video/x-raw, format=BGR ! "
-            f"appsink drop=1"
+        self.gst_pipeline= (
+            'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), ',
+            'width={image_width},height={image_height},framerate=30/1,format=NV12 ! ',
+            'nvvidconv ! video/x-raw,format=BGRx,width={image_width},height={image_height} ! ',
+            'videoconvert ! video/x-raw,format=BGR ! appsink drop=1'
         )
+        self.gst_pipeline = ''.join(self.gst_pipeline).format(image_width=640, image_height=480)
         
         self.get_logger().info('Initializing camera with pipeline:')
         self.get_logger().info(f'  Resolution: {width}x{height} @ {fps} FPS')
         self.get_logger().info(f'  Flip method: {flip}')
-        self.get_logger().info(f'  Pipeline: {self.gstreamer_pipeline}')
-        
-        # Open camera
-        self.cap = cv2.VideoCapture(self.gstreamer_pipeline, cv2.CAP_GSTREAMER)
-        
-        if not self.cap.isOpened():
-            self.get_logger().error('Failed to open camera! Check:')
-            self.get_logger().error('  1. Camera cable connection')
-            self.get_logger().error('  2. Camera detected: ls /dev/video*')
-            self.get_logger().error('  3. GStreamer: gst-inspect-1.0 nvarguscamerasrc')
-            raise RuntimeError('Camera initialization failed')
-        
-        self.get_logger().info('✅ Camera opened successfully')
+        self.get_logger().info(f'  Pipeline: {self.gst_pipeline}')
+       
+        print(f"GStreamer pipeline: {self.gst_pipeline}")
+        self.capture = cv2.VideoCapture(self.gst_pipeline, cv2.CAP_GSTREAMER)
+        print(f"Camera opened: {self.capture.isOpened()}")
+        if not self.capture.isOpened():
+            raise RuntimeError("Error: Unable to open camera")
         
         # QoS Profile: Best Effort for real-time streaming
         qos_profile = QoSProfile(
@@ -136,7 +128,7 @@ class CameraPublisher(Node):
     
     def timer_callback(self):
         """Capture and publish camera frame"""
-        ret, frame = self.cap.read()
+        ret, frame = self.capture.read()
 
         if not ret:
             self.get_logger().warn('Failed to capture frame')
