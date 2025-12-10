@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
@@ -63,12 +64,19 @@ class ROS2NetworkBridgeNode(Node):
         self.last_inference_time = 0.0
         self.inference_interval = 1.0 / self.inference_rate
         
+        # QoS Profile - Must match camera publisher (BEST_EFFORT)
+        qos_profile = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1
+        )
+        
         # Subscribe to camera images from ROS2
         self.image_sub = self.create_subscription(
             Image,
             '/camera/image_raw',
             self.image_callback,
-            10
+            qos_profile
         )
         
         # Publish inference results to ROS2
