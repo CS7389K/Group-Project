@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
 """
-ROS2 to Network Bridge Node
-============================
+ROS2 to Network Bridge Node with YOLO Integration
+==================================================
 Runs on TurtleBot3 (Jetson Xavier NX).
-Subscribes to camera images from ROS2, sends them to remote VLM server via HTTP,
+Subscribes to camera images and YOLO detections from ROS2,
+sends them to remote VLM server via HTTP,
 receives inference results, and publishes back to ROS2.
-
-Architecture:
-  TurtleBot3 (ROS2) <---> Bridge Node <---> Remote VLM Server (HTTP, no ROS)
-  
-Topics:
-  - Subscribes: /camera/image_raw (sensor_msgs/Image)
-  - Publishes: /vlm/inference_result (std_msgs/String)
 """
 
 from __future__ import annotations
@@ -35,34 +29,41 @@ import time
 class ROS2NetworkBridgeNode(Node):
     """
     Bridge between ROS2 (TurtleBot3) and remote VLM server (non-ROS)
+    with YOLO integration for enhanced object detection
     """
     
     def __init__(self):
         super().__init__('ros2_network_bridge')
         
         # Parameters
-        self.declare_parameter('vlm_server_url', 'http://192.168.1.100:5000')  # Remote VLM server
-        self.declare_parameter('inference_rate', 2.0)  # Hz - limit inference requests
-        self.declare_parameter('timeout', 10.0)  # seconds
+        self.declare_parameter('vlm_server_url', 'http://10.43.174.30:5000')
+        self.declare_parameter('inference_rate', 2.0)
+        self.declare_parameter('timeout', 15.0)
         self.declare_parameter('prompt', 'Describe this image in detail.')
-        self.declare_parameter('show_preview', True)  # Show CV window with images
+        self.declare_parameter('show_preview', True)
+        self.declare_parameter('use_yolo', True)
         
         self.vlm_server_url = self.get_parameter('vlm_server_url').value
         self.inference_rate = self.get_parameter('inference_rate').value
         self.timeout = self.get_parameter('timeout').value
         self.prompt = self.get_parameter('prompt').value
         self.show_preview = self.get_parameter('show_preview').value
+        self.use_yolo = self.get_parameter('use_yolo').value
         
-        self.get_logger().info('Initializing ROS2-Network Bridge...')
-        self.get_logger().info(f'  VLM Server: {self.vlm_server_url}')
-        self.get_logger().info(f'  Inference Rate: {self.inference_rate} Hz')
-        self.get_logger().info(f'  Default Prompt: "{self.prompt}"')
-        self.get_logger().info(f'  Show Preview: {self.show_preview}')
+        self.get_logger().info('='*70)
+        self.get_logger().info('ROS2-Network Bridge with YOLO')
+        self.get_logger().info('='*70)
+        self.get_logger().info(f'VLM Server: {self.vlm_server_url}')
+        self.get_logger().info(f'Inference Rate: {self.inference_rate} Hz')
+        self.get_logger().info(f'YOLO Guidance: {self.use_yolo}')
+        self.get_logger().info(f'Show Preview: {self.show_preview}')
+        self.get_logger().info('='*70)
         
         # Initialize
         self.bridge = CvBridge()
         self.last_inference_time = 0.0
         self.inference_interval = 1.0 / self.inference_rate
+        self.latest_yolo_detection = None
         
         # QoS Profile - Must match camera publisher (BEST_EFFORT)
         qos_profile = QoSProfile(
@@ -79,6 +80,16 @@ class ROS2NetworkBridgeNode(Node):
             qos_profile
         )
         
+        # Subscribe to YOLO detections
+        if self.use_yolo:
+            self.yolo_sub = self.create_subscription(
+                String,
+                '/yolo/detections',
+                self.yolo_callback,
+                10
+            )
+            self.get_logger().info('✓ YOLO subscription active')
+        
         # Publish inference results to ROS2
         self.result_pub = self.create_publisher(
             String,
@@ -92,11 +103,25 @@ class ROS2NetworkBridgeNode(Node):
         self.error_count = 0
         self.last_result = "Waiting for first inference..."
         
-        self.get_logger().info('ROS2-Network Bridge ready!')
-        self.get_logger().info('Waiting for images on /camera/image_raw...')
-        
-        if self.show_preview:
-            self.get_logger().info('Preview window will open when first image arrives')
+        self.get_logger().info('✅ Bridge ready! Waiting for images...')
+    
+    def yolo_callback(self, msg: String):
+        """Receive YOLO detections and store best detection"""
+        try:
+            data = json.loads(msg.data)
+            detections = data.get('detections', [])
+            
+            if detections:
+                # Store highest confidence detection
+                self.latest_yolo_detection = max(detections, key=lambda x: x['confidence'])
+                
+                self.get_logger().info(
+                    f"YOLO: {self.latest_yolo_detection['class']} "
+                    f"@ {self.latest_yolo_detection['confidence']:.2f}",
+                    throttle_duration_sec=3.0
+                )
+        except Exception as e:
+            self.get_logger().error(f'YOLO callback error: {e}')
     
     def image_callback(self, msg: Image):
         """
@@ -105,15 +130,16 @@ class ROS2NetworkBridgeNode(Node):
         """
         self.frame_count += 1
         
-        # Log first frame immediately
+        # Log first frame
         if self.frame_count == 1:
             self.get_logger().info('✓ First camera frame received!')
-            self.get_logger().info(f'  Image size: {msg.width}x{msg.height}')
-            self.get_logger().info(f'  Encoding: {msg.encoding}')
+            self.get_logger().info(f'  Size: {msg.width}x{msg.height}')
         
-        # Log every 100 frames to show we're receiving data
+        # Log every 100 frames
         if self.frame_count % 100 == 0:
-            self.get_logger().info(f'Received {self.frame_count} frames total (inference count: {self.inference_count})')
+            self.get_logger().info(
+                f'Frames: {self.frame_count} | Inferences: {self.inference_count}'
+            )
         
         current_time = time.time()
         
@@ -123,7 +149,7 @@ class ROS2NetworkBridgeNode(Node):
         
         self.last_inference_time = current_time
         
-        self.get_logger().info(f'Processing frame {self.frame_count} for inference...')
+        self.get_logger().info(f'Processing frame {self.frame_count}...')
         
         try:
             # Convert ROS Image to OpenCV format
@@ -131,48 +157,48 @@ class ROS2NetworkBridgeNode(Node):
             
             # Show preview window if enabled
             if self.show_preview:
-                # Create display image with information overlay
                 display_image = cv_image.copy()
-                
-                # Add text overlays
                 font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.6
-                thickness = 2
                 
-                # Status info at top
-                status_text = f"Frame: {self.frame_count} | Inferences: {self.inference_count}"
-                cv2.putText(display_image, status_text, (10, 30), 
-                           font, font_scale, (0, 255, 0), thickness)
+                # Status
+                status = f"Frame: {self.frame_count} | Inferences: {self.inference_count}"
+                cv2.putText(display_image, status, (10, 30), 
+                           font, 0.6, (0, 255, 0), 2)
                 
-                # VLM Server URL
-                server_text = f"VLM: {self.vlm_server_url}"
-                cv2.putText(display_image, server_text, (10, 60), 
-                           font, 0.5, (255, 255, 255), 1)
+                # YOLO info
+                if self.latest_yolo_detection:
+                    yolo_info = f"YOLO: {self.latest_yolo_detection['class']} ({self.latest_yolo_detection['confidence']:.2f})"
+                    cv2.putText(display_image, yolo_info, (10, 60),
+                               font, 0.6, (255, 255, 0), 2)
+                    
+                    # Draw YOLO bbox
+                    bbox = self.latest_yolo_detection['bbox']
+                    cv2.rectangle(display_image, 
+                                 (bbox['x1'], bbox['y1']),
+                                 (bbox['x2'], bbox['y2']),
+                                 (0, 255, 255), 2)
                 
-                # Last inference result at bottom (wrap text if too long)
+                # Last result
                 result_lines = []
                 if len(self.last_result) > 80:
-                    # Split into multiple lines
                     words = self.last_result.split()
-                    current_line = ""
+                    line = ""
                     for word in words:
-                        if len(current_line + word) < 80:
-                            current_line += word + " "
+                        if len(line + word) < 80:
+                            line += word + " "
                         else:
-                            result_lines.append(current_line)
-                            current_line = word + " "
-                    if current_line:
-                        result_lines.append(current_line)
+                            result_lines.append(line)
+                            line = word + " "
+                    if line:
+                        result_lines.append(line)
                 else:
                     result_lines = [self.last_result]
                 
-                # Draw result text (up to 3 lines)
                 y_offset = display_image.shape[0] - 20 - (len(result_lines[:3]) * 25)
                 for i, line in enumerate(result_lines[:3]):
                     cv2.putText(display_image, line, (10, y_offset + i * 25), 
                                font, 0.5, (0, 255, 255), 1)
                 
-                # Show window
                 cv2.imshow('VLM Bridge - Camera Feed', display_image)
                 cv2.waitKey(1)
             
@@ -180,20 +206,18 @@ class ROS2NetworkBridgeNode(Node):
             pil_image = PILImage.fromarray(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
             
             # Send to remote VLM server
-            self.get_logger().info(f'Sending image to VLM server (frame {self.frame_count})...')
             result = self.send_inference_request(pil_image, self.prompt)
             
             if result:
-                # Store last result for display
                 self.last_result = result
                 
-                # Publish result back to ROS2
+                # Publish result
                 result_msg = String()
                 result_msg.data = result
                 self.result_pub.publish(result_msg)
                 
                 self.inference_count += 1
-                self.get_logger().info(f'Published inference result: {result[:100]}...')
+                self.get_logger().info(f'✓ Result: {result[:100]}...')
             
         except Exception as e:
             self.error_count += 1
@@ -201,60 +225,70 @@ class ROS2NetworkBridgeNode(Node):
     
     def send_inference_request(self, image: PILImage.Image, prompt: str) -> str:
         """
-        Send image to remote VLM server via HTTP POST.
-        
-        Args:
-            image: PIL Image
-            prompt: Text prompt for VLM
-            
-        Returns:
-            Inference result string, or None if failed
+        Send image to remote VLM server via HTTP POST with YOLO guidance.
         """
         try:
-            # Encode image as base64 JPEG
+            # Encode image as base64
             buffered = BytesIO()
             image.save(buffered, format="JPEG", quality=85)
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            img_size_kb = len(img_base64) / 1024
             
-            self.get_logger().info(f'Encoded image: {img_size_kb:.1f} KB')
-            
-            # Prepare request payload
+            # Prepare payload
             payload = {
                 'image': img_base64,
                 'prompt': prompt,
                 'timestamp': time.time()
             }
             
-            # Send HTTP POST request to VLM server
-            self.get_logger().info(f'Sending POST to {self.vlm_server_url}/analyze')
+            # Add YOLO guidance if available
+            if self.use_yolo and self.latest_yolo_detection:
+                payload['object_class'] = self.latest_yolo_detection['class']
+                payload['yolo_confidence'] = self.latest_yolo_detection['confidence']
+                payload['bbox'] = self.latest_yolo_detection['bbox']
+                
+                self.get_logger().info(
+                    f"→ With YOLO: {payload['object_class']} "
+                    f"@ {payload['yolo_confidence']:.2f}"
+                )
+            else:
+                payload['object_class'] = 'object'
+            
+            # Send HTTP POST
+            self.get_logger().info(f'→ POST to {self.vlm_server_url}/analyze')
             start_time = time.time()
+            
             response = requests.post(
                 f'{self.vlm_server_url}/analyze',
                 json=payload,
                 timeout=self.timeout
             )
-            elapsed_ms = (time.time() - start_time) * 1000
             
-            self.get_logger().info(f'Got response: status={response.status_code}')
+            elapsed_ms = (time.time() - start_time) * 1000
             
             if response.status_code == 200:
                 result = response.json()
-                self.get_logger().info(f'Inference completed in {elapsed_ms:.0f}ms')
-                return result.get('result', 'No result')
+                self.get_logger().info(f'✓ Response in {elapsed_ms:.0f}ms')
+                
+                # Extract result
+                if 'result' in result:
+                    return result.get('result', 'No result')
+                elif 'action' in result:
+                    # Enhanced VLM response
+                    return f"{result.get('action', '?')}: {result.get('reasoning', '')[:100]}"
+                else:
+                    return str(result)
             else:
-                self.get_logger().error(f'Server error: {response.status_code} - {response.text}')
+                self.get_logger().error(f'Server error: {response.status_code}')
                 return None
                 
         except requests.exceptions.Timeout:
-            self.get_logger().error(f'Request timeout ({self.timeout}s) - VLM server took too long')
+            self.get_logger().error(f'Timeout ({self.timeout}s)')
             return None
-        except requests.exceptions.ConnectionError as e:
-            self.get_logger().error(f'Cannot connect to VLM server at {self.vlm_server_url}')
-            self.get_logger().error(f'Connection error: {e}')
+        except requests.exceptions.ConnectionError:
+            self.get_logger().error(f'Cannot connect to {self.vlm_server_url}')
             return None
         except Exception as e:
-            self.get_logger().error(f'Inference request error: {type(e).__name__}: {e}')
+            self.get_logger().error(f'Request error: {e}')
             return None
 
 
@@ -266,11 +300,10 @@ def main(args=None):
         node = ROS2NetworkBridgeNode()
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print("\n\nShutting down ROS2-Network Bridge...")
+        print("\n\nShutting down...")
     except Exception as e:
         print(f'Error: {e}')
     finally:
-        # Cleanup CV windows
         cv2.destroyAllWindows()
         if rclpy.ok():
             rclpy.shutdown()
