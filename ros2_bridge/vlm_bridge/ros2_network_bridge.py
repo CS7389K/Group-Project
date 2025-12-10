@@ -227,10 +227,10 @@ class ROS2NetworkBridgeNode(Node):
             }
             
             # Send HTTP POST request to VLM server
-            self.get_logger().info(f'Sending POST to {self.vlm_server_url}/inference')
+            self.get_logger().info(f'Sending POST to {self.vlm_server_url}/analyze')
             start_time = time.time()
             response = requests.post(
-                f'{self.vlm_server_url}/inference',
+                f'{self.vlm_server_url}/analyze',
                 json=payload,
                 timeout=self.timeout
             )
