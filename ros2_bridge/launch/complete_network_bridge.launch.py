@@ -34,6 +34,18 @@ def generate_launch_description():
     """Generate complete launch description"""
     
     # Camera arguments
+    camera_device_arg = DeclareLaunchArgument(
+        'camera_device',
+        default_value='/dev/video1',
+        description='Camera device for USB cameras (e.g., /dev/video0, /dev/video1)'
+    )
+    
+    force_v4l2_arg = DeclareLaunchArgument(
+        'force_v4l2',
+        default_value='false',
+        description='Force V4L2 (USB) mode, skip GStreamer (CSI) attempt'
+    )
+    
     camera_width_arg = DeclareLaunchArgument(
         'camera_width',
         default_value='640',
@@ -103,11 +115,11 @@ def generate_launch_description():
             '  Complete Network Bridge System\n',
             '========================================================\n',
             'Starting:\n',
-            '  1. Camera Publisher (GStreamer) -> /camera/image_raw\n',
+            '  1. Camera Publisher (Auto CSI/USB) -> /camera/image_raw\n',
             '  2. ROS2-Network Bridge -> VLM Server\n',
             '\n',
             'VLM Server URL: ', LaunchConfiguration('vlm_server_url'), '\n',
-            'Camera: Jetson RPi Camera (nvarguscamerasrc)\n',
+            'Camera Device: ', LaunchConfiguration('camera_device'), ' (USB fallback)\n',
             '\n',
             'Topics:\n',
             '  - Published: /camera/image_raw (sensor_msgs/Image)\n',
@@ -127,6 +139,8 @@ def generate_launch_description():
         name='camera_publisher',
         output='screen',
         parameters=[{
+            'camera_device': LaunchConfiguration('camera_device'),
+            'force_v4l2': LaunchConfiguration('force_v4l2'),
             'camera_width': LaunchConfiguration('camera_width'),
             'camera_height': LaunchConfiguration('camera_height'),
             'camera_fps': LaunchConfiguration('camera_fps'),
@@ -152,6 +166,8 @@ def generate_launch_description():
     
     return LaunchDescription([
         # Arguments
+        camera_device_arg,
+        force_v4l2_arg,
         camera_width_arg,
         camera_height_arg,
         camera_fps_arg,
