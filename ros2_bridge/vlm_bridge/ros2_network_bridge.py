@@ -97,6 +97,16 @@ class ROS2NetworkBridgeNode(Node):
         """
         self.frame_count += 1
         
+        # Log first frame immediately
+        if self.frame_count == 1:
+            self.get_logger().info('✓ First camera frame received!')
+            self.get_logger().info(f'  Image size: {msg.width}x{msg.height}')
+            self.get_logger().info(f'  Encoding: {msg.encoding}')
+        
+        # Log every 100 frames to show we're receiving data
+        if self.frame_count % 100 == 0:
+            self.get_logger().info(f'Received {self.frame_count} frames total (inference count: {self.inference_count})')
+        
         current_time = time.time()
         
         # Throttle inference requests
@@ -104,6 +114,8 @@ class ROS2NetworkBridgeNode(Node):
             return
         
         self.last_inference_time = current_time
+        
+        self.get_logger().info(f'Processing frame {self.frame_count} for inference...')
         
         try:
             # Convert ROS Image to OpenCV format
@@ -195,6 +207,9 @@ class ROS2NetworkBridgeNode(Node):
             buffered = BytesIO()
             image.save(buffered, format="JPEG", quality=85)
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            img_size_kb = len(img_base64) / 1024
+            
+            self.get_logger().info(f'Encoded image: {img_size_kb:.1f} KB')
             
             # Prepare request payload
             payload = {
@@ -204,6 +219,7 @@ class ROS2NetworkBridgeNode(Node):
             }
             
             # Send HTTP POST request to VLM server
+            self.get_logger().info(f'Sending POST to {self.vlm_server_url}/inference')
             start_time = time.time()
             response = requests.post(
                 f'{self.vlm_server_url}/inference',
@@ -211,6 +227,8 @@ class ROS2NetworkBridgeNode(Node):
                 timeout=self.timeout
             )
             elapsed_ms = (time.time() - start_time) * 1000
+            
+            self.get_logger().info(f'Got response: status={response.status_code}')
             
             if response.status_code == 200:
                 result = response.json()
@@ -221,13 +239,14 @@ class ROS2NetworkBridgeNode(Node):
                 return None
                 
         except requests.exceptions.Timeout:
-            self.get_logger().error(f'Request timeout ({self.timeout}s)')
+            self.get_logger().error(f'Request timeout ({self.timeout}s) - VLM server took too long')
             return None
-        except requests.exceptions.ConnectionError:
+        except requests.exceptions.ConnectionError as e:
             self.get_logger().error(f'Cannot connect to VLM server at {self.vlm_server_url}')
+            self.get_logger().error(f'Connection error: {e}')
             return None
         except Exception as e:
-            self.get_logger().error(f'Inference request error: {e}')
+            self.get_logger().error(f'Inference request error: {type(e).__name__}: {e}')
             return None
 
 
