@@ -3,6 +3,7 @@ services:
     build: .
     image: moondream2-jetson-sim:latest
     container_name: moondream2_dev
+    runtime: nvidia
     
     shm_size: '2gb'
     
