@@ -7,7 +7,7 @@ Supports both CSI (GStreamer) and USB (V4L2) cameras with automatic fallback.
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -76,10 +76,12 @@ class CameraPublisherNode(Node):
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=10,  # Increased from 1 to allow buffering
+            durability=QoSDurabilityPolicy.VOLATILE
         )
         
         self.publisher = self.create_publisher(Image, '/camera/image_raw', qos)
+        self.get_logger().info(f'Publisher QoS: BEST_EFFORT, KEEP_LAST(10), VOLATILE')
         self.bridge = CvBridge()
         self.frame_count = 0
         

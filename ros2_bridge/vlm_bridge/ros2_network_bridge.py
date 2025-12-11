@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
 from cv_bridge import CvBridge
@@ -69,8 +69,10 @@ class ROS2NetworkBridgeNode(Node):
         qos_profile = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1
+            depth=10,  # Match publisher buffer
+            durability=QoSDurabilityPolicy.VOLATILE
         )
+        self.get_logger().info('Subscriber QoS: BEST_EFFORT, KEEP_LAST(10), VOLATILE')
         
         # Subscribe to camera images from ROS2
         self.image_sub = self.create_subscription(
@@ -134,11 +136,13 @@ class ROS2NetworkBridgeNode(Node):
         if self.frame_count == 1:
             self.get_logger().info('✓ First camera frame received!')
             self.get_logger().info(f'  Size: {msg.width}x{msg.height}')
+            self.get_logger().info(f'  Encoding: {msg.encoding}')
+            self.get_logger().info(f'  Timestamp: {msg.header.stamp.sec}.{msg.header.stamp.nanosec}')
         
-        # Log every 100 frames
-        if self.frame_count % 100 == 0:
+        # Log every 30 frames (more frequent for debugging)
+        if self.frame_count % 30 == 0:
             self.get_logger().info(
-                f'Frames: {self.frame_count} | Inferences: {self.inference_count}'
+                f'Frames: {self.frame_count} | Inferences: {self.inference_count} | Errors: {self.error_count}'
             )
         
         current_time = time.time()
