@@ -14,7 +14,81 @@ import cv2
 import os
 
 
+class CameraGStreamer:
+    """Camera capture using a GStreamer pipeline."""
+
+    def __init__(self, pipeline: str, width=640, height=480):
+        self.pipeline = pipeline
+        self.width = width
+        self.height = height
+        self._cap = None
+
+    def open(self):
+        self._cap = cv2.VideoCapture(self.pipeline, cv2.CAP_GSTREAMER)
+        if not self._cap.isOpened():
+            raise RuntimeError(
+                f"Unable to open GStreamer pipeline: {self.pipeline}")
+
+    def read(self):
+        if self._cap is None:
+            raise RuntimeError("Camera not opened")
+        return self._cap.read()
+
+    def isOpened(self):
+        return self._cap is not None and self._cap.isOpened()
+
+    def release(self):
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
+
+
+class CameraCV2:
+    """Camera capture using OpenCV V4L2."""
+
+    def __init__(self, device='/dev/video0', width=640, height=480, fps=30):
+        self.device = device
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self._cap = None
+
+    def open(self):
+        if not os.path.exists(self.device):
+            raise RuntimeError(f'Camera device {self.device} not found!')
+        
+        self._cap = cv2.VideoCapture(self.device, cv2.CAP_V4L2)
+        if not self._cap.isOpened():
+            raise RuntimeError(f'Failed to open camera device {self.device}')
+        
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+        self._cap.set(cv2.CAP_PROP_FPS, self.fps)
+
+    def read(self):
+        if self._cap is None:
+            raise RuntimeError("Camera not opened")
+        return self._cap.read()
+
+    def isOpened(self):
+        return self._cap is not None and self._cap.isOpened()
+
+    def release(self):
+        if self._cap is not None:
+            self._cap.release()
+            self._cap = None
+
+
 class CameraPublisherNode(Node):
+    
+    _GSTREAMER_PIPELINE = (
+        'nvarguscamerasrc sensor-id=0 ! '
+        'video/x-raw(memory:NVMM), width={image_width}, height={image_height}, framerate=30/1, format=NV12 ! '
+        'nvvidconv ! video/x-raw, format=BGRx, width={image_width}, height={image_height} ! '
+        'videoconvert ! video/x-raw, format=BGR ! '
+        'appsink max-buffers=1 drop=true sync=false'
+    )
+    
     def __init__(self):
         super().__init__('camera_publisher')
         
@@ -25,53 +99,72 @@ class CameraPublisherNode(Node):
         self.declare_parameter('show_preview', False)
         self.declare_parameter('camera_device', '/dev/video1')
         self.declare_parameter('force_v4l2', False)
+        self.declare_parameter('camera_backend', 'auto')  # 'auto', 'gstreamer', 'v4l2'
+        self.declare_parameter('gstreamer_pipeline', '')
         
-        width = self.get_parameter('camera_width').value
-        height = self.get_parameter('camera_height').value
+        self._output_width = self.get_parameter('camera_width').value
+        self._output_height = self.get_parameter('camera_height').value
         fps = self.get_parameter('camera_fps').value
         self.show_preview = self.get_parameter('show_preview').value
-        device = self.get_parameter('camera_device').value
+        camera_device = self.get_parameter('camera_device').value
         force_v4l2 = self.get_parameter('force_v4l2').value
+        camera_backend = self.get_parameter('camera_backend').value
+        gstreamer_pipeline = self.get_parameter('gstreamer_pipeline').value
         
-        self.get_logger().info(f'Camera Config: {width}x{height} @ {fps} FPS')
-        self.get_logger().info(f'USB Device: {device}')
+        self.get_logger().info(f'Camera Config: {self._output_width}x{self._output_height} @ {fps} FPS')
+        self.get_logger().info(f'USB Device: {camera_device}')
         
-        self.capture = None
+        self._camera = None
         self.camera_type = None
         
-        # Try GStreamer first
-        if not force_v4l2:
-            self.get_logger().info('Trying GStreamer (CSI)...')
-            gst = (
-                f'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM),'
-                f'width={width},height={height},framerate={fps}/1,format=NV12 ! '
-                f'nvvidconv ! video/x-raw,format=BGRx,width={width},height={height} ! '
-                f'videoconvert ! video/x-raw,format=BGR ! appsink drop=1'
-            )
-            self.capture = cv2.VideoCapture(gst, cv2.CAP_GSTREAMER)
-            if self.capture.isOpened():
-                self.camera_type = 'GStreamer-CSI'
-                self.get_logger().info('✓ CSI camera OK')
-            else:
-                self.capture = None
+        # Determine camera backend
+        if force_v4l2:
+            camera_backend = 'v4l2'
+        elif camera_backend == 'auto':
+            # Try GStreamer first, fallback to V4L2
+            camera_backend = 'gstreamer'
         
-        # Fallback to V4L2
-        if not self.capture or not self.capture.isOpened():
-            self.get_logger().info(f'Trying V4L2 (USB): {device}')
-            if not os.path.exists(device):
-                self.get_logger().error(f'{device} not found!')
-                raise RuntimeError(f'No camera at {device}')
-            
-            self.capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
-            if not self.capture.isOpened():
-                raise RuntimeError(f'Failed to open {device}')
-            
-            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            self.capture.set(cv2.CAP_PROP_FPS, fps)
-            
-            self.camera_type = f'V4L2-USB-{device}'
-            self.get_logger().info(f'✓ USB camera OK')
+        # Camera selection
+        if camera_backend == 'gstreamer':
+            if not gstreamer_pipeline:
+                # Use requested dimensions in the pipeline
+                gstreamer_pipeline = self._GSTREAMER_PIPELINE.format(
+                    image_width=self._output_width,
+                    image_height=self._output_height
+                )
+            self.get_logger().info(
+                f"Opening camera with GStreamer pipeline: {gstreamer_pipeline}")
+            self._camera = CameraGStreamer(
+                gstreamer_pipeline, width=self._output_width, height=self._output_height)
+            try:
+                self._camera.open()
+                if self._camera.isOpened():
+                    self.camera_type = 'GStreamer-CSI'
+                    self.get_logger().info('✓ CSI camera opened successfully')
+                else:
+                    self.get_logger().warn('GStreamer failed, falling back to V4L2')
+                    self._camera = None
+                    camera_backend = 'v4l2'
+            except RuntimeError as e:
+                self.get_logger().warn(f'GStreamer failed: {e}, falling back to V4L2')
+                self._camera = None
+                camera_backend = 'v4l2'
+        
+        if camera_backend == 'v4l2' or self._camera is None:
+            self.get_logger().info(
+                f"Opening camera with OpenCV device {camera_device}")
+            self._camera = CameraCV2(
+                device=camera_device, width=self._output_width, height=self._output_height, fps=fps)
+            self._camera.open()
+            if not self._camera.isOpened():
+                raise RuntimeError(f"Error: Unable to open camera {camera_device}")
+            self.camera_type = f'V4L2-USB-{camera_device}'
+            self.get_logger().info('✓ USB camera opened successfully')
+        
+        if not self._camera or not self._camera.isOpened():
+            raise RuntimeError("Error: Unable to open camera")
+        
+        self.get_logger().info("Camera opened successfully")
         
         qos = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -81,17 +174,17 @@ class CameraPublisherNode(Node):
         )
         
         self.publisher = self.create_publisher(Image, '/camera/image_raw', qos)
-        self.get_logger().info(f'Publisher QoS: BEST_EFFORT, KEEP_LAST(10), VOLATILE')
+        self.get_logger().info('Publisher QoS: BEST_EFFORT, KEEP_LAST(10), VOLATILE')
         self.bridge = CvBridge()
         self.frame_count = 0
         
         self.get_logger().info(f'Publishing with {self.camera_type}')
     
     def step(self):
-        if not self.capture.isOpened():
+        if not self._camera.isOpened():
             return
         
-        ret, frame = self.capture.read()
+        ret, frame = self._camera.read()
         if not ret or frame is None:
             return
 
@@ -114,8 +207,8 @@ class CameraPublisherNode(Node):
     def shutdown(self):
         if self.show_preview:
             cv2.destroyAllWindows()
-        if self.capture:
-            self.capture.release()
+        if self._camera:
+            self._camera.release()
 
 
 def main(args=None):

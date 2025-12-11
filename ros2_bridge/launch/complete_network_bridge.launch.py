@@ -146,6 +146,7 @@ def generate_launch_description():
             'camera_fps': LaunchConfiguration('camera_fps'),
             'flip_method': LaunchConfiguration('flip_method'),
             'show_preview': LaunchConfiguration('show_camera_preview'),
+            "camera_backend": "gstreamer"
         }]
     )
     
