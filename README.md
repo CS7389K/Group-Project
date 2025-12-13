@@ -68,16 +68,16 @@ git clone https://github.com/CS7389K/Group-Project.git ~/turtlebot3_vlm
 cd ~/turtlebot3_vlm
 
 # On the Remote Machine:
-colcon build --symlink-install --packages-select ros2_bridge
+colcon build --symlink-install --packages-select vlm_bridge
 source ./install/setup.bash
-ros2 launch turtlebot3_vlm_perception vlm.launch.py
+ros2 launch vlm_bridge vlm_bridge.launch.py
 
 # On Turtlebot3 Jetson:
 colcon build --symlink-install --packages-select turtlebot3_vlm_perception
 source ./install/setup.bash
-ros2 launch vlm_bridge vlm_bridge_with_yolo.launch.py
+ros2 launch vlm_bridge vlm_with_yolo.launch.py
 # Or Without YOLO:
-# ros2 launch vlm_bridge vlm_bridge.launch.py
+# ros2 launch turtlebot3_vlm_perception vlm.launch.py
 ```
 
 ### Download VLM Models
