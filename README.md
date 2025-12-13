@@ -47,17 +47,17 @@ An intelligent perception pipeline for TurtleBot3 combining YOLO11 object detect
 
 ```
 ├── src/
-│   ├── perception/                   # TurtleBot3 ROS2 client
-│   │   ├── launch/                   # Launch files for VLM perception stack
+│   ├── turtlebot3_vlm_perception/    # TurtleBot3 ROS2 client
+│   │   └── launch/                   # Launch files for VLM perception stack
 │   └── vlm_bridge/                   # VLM inference server
-│       ├── launch/                   # Launch files for VLM server & bridges
+│       └── launch/                   # Launch files for VLM server & bridges
 ├── tools/
 │   ├── git_fetch_and_build.sh        # Git update and build helper
 │   └── restart_camera.sh             # Camera troubleshooting utility
 ├── scripts/
 │   └── download_vlm_models.py        # Download VLM
-├── pyproject.toml                     # Python project configuration
-└── docker-compose.yml                 # Docker deployment configuration
+├── pyproject.toml                    # Python project configuration
+└── docker-compose.yml                # Docker deployment configuration
 ```
 
 ## Usage
