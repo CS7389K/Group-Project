@@ -68,6 +68,10 @@ git clone https://github.com/CS7389K/Group-Project.git ~/turtlebot3_vlm
 cd ~/turtlebot3_vlm
 
 # On the Remote Machine:
+# First, start the Flask VLM server (required for vlm_bridge)
+python3 scripts/vlm_ros_server.py
+
+# In a separate terminal on the same Remote Machine:
 colcon build --symlink-install --packages-select vlm_bridge
 source ./install/setup.bash
 ros2 launch vlm_bridge vlm_bridge.launch.py
@@ -79,6 +83,8 @@ ros2 launch vlm_bridge vlm_with_yolo.launch.py
 # Or Without YOLO:
 # ros2 launch turtlebot3_vlm_perception vlm.launch.py
 ```
+
+**Important**: The Flask server (`vlm_ros_server.py`) must be running on the same machine as `vlm_bridge` to handle VLM inference requests.
 
 ### Download VLM Models
 
