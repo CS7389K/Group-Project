@@ -16,8 +16,8 @@ An intelligent perception pipeline for TurtleBot3 combining YOLO11 object detect
 - [Overview](#overview)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
-- [Project Structure](#project-structure)
 - [Usage](#usage)
+- [Project Structure](#project-structure)
 - [System Architecture](#system-architecture)
 - [Troubleshooting](#troubleshooting)
 - [Resources](#resources)
@@ -42,23 +42,6 @@ An intelligent perception pipeline for TurtleBot3 combining YOLO11 object detect
   - VLM Server: Ubuntu 22.04 LTS
 - **ROS2**: Foxy
 - **Python**: 3.8+
-
-## Project Structure
-
-```
-├── src/
-│   ├── turtlebot3_vlm_perception/    # TurtleBot3 ROS2 client
-│   │   └── launch/                   # Launch files for VLM perception stack
-│   └── vlm_bridge/                   # VLM inference server
-│       └── launch/                   # Launch files for VLM server & bridges
-├── tools/
-│   ├── git_fetch_and_build.sh        # Git update and build helper
-│   └── restart_camera.sh             # Camera troubleshooting utility
-├── scripts/
-│   └── download_vlm_models.py        # Download VLM
-├── pyproject.toml                    # Python project configuration
-└── docker-compose.yml                # Docker deployment configuration
-```
 
 ## Usage
 
@@ -91,6 +74,23 @@ ros2 launch vlm_bridge vlm_with_yolo.launch.py
 ```bash
 cd scripts
 python3 download_vlm_models.py --output-dir ./vlm_models
+```
+
+## Project Structure
+
+```
+├── src/
+│   ├── turtlebot3_vlm_perception/    # TurtleBot3 ROS2 client
+│   │   └── launch/                   # Launch files for VLM perception stack
+│   └── vlm_bridge/                   # VLM inference server
+│       └── launch/                   # Launch files for VLM server & bridges
+├── tools/
+│   ├── git_fetch_and_build.sh        # Git update and build helper
+│   └── restart_camera.sh             # Camera troubleshooting utility
+├── scripts/
+│   └── download_vlm_models.py        # Download VLM
+├── pyproject.toml                    # Python project configuration
+└── docker-compose.yml                # Docker deployment configuration
 ```
 
 ## System Architecture
