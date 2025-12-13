@@ -29,6 +29,7 @@ setup(
             'yolo_vlm_bridge = vlm_bridge.yolo_vlm_bridge:main',
             'camera_publisher = vlm_bridge.camera_publisher:main',
             'vlm_client = vlm_bridge.vlm_client:main',
+            'vlm_server = vlm_bridge.vlm_server:main',
         ],
     },
 )

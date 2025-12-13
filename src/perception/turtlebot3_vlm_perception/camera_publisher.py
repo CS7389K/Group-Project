@@ -38,12 +38,7 @@ class CameraPublisher(Node):
         fps = self.get_parameter('camera_fps').value
         flip = self.get_parameter('flip_method').value
         
-        # GStreamer pipeline for Jetson Xavier NX + RPi Camera
-        # Based on working pipeline from CS7389K/Milestone-4
-        # Key differences from broken version:
-        # 1. sensor-id=0 parameter
-        # 2. Capture at native resolution, then scale down
-        # 3. drop=1 in appsink to prevent buffering
+        # GStreamer pipeline
         self.gst_pipeline= (
             'nvarguscamerasrc sensor-id=0 ! video/x-raw(memory:NVMM), ',
             'width={{image_width}},height={{image_height}},framerate={{fps}}/1,format=NV12 ! ',
